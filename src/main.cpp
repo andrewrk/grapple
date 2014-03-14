@@ -1,3 +1,8 @@
+#include "mainwindow.h"
+#include <ctime>
+
 int main(int argc, char * argv[]) {
-    return 0;
+    srand(time(NULL));
+    MainWindow *window = new MainWindow();
+    return window->start();
 }

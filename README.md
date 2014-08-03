@@ -2,5 +2,6 @@
 
 ## Dependencies
 
- * SDL2
+ * cmake
+ * SFML
  * Box2D

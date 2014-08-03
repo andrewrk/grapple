@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include <iostream>
-#include <chrono>
+#include <SFML/Graphics.hpp>
 
 
 static const float EPSILON = 0.0000000001;
@@ -17,62 +17,23 @@ MainWindow::MainWindow()
 
 int MainWindow::start()
 {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) < 0) {
-        std::cerr << "Unable to initialize SDL\n";
-        exit(1);
-    }
-    atexit(SDL_Quit);
+    sf::RenderWindow window(sf::VideoMode(200, 200), "SFML works!");
+    sf::CircleShape shape(100.f);
+    shape.setFillColor(sf::Color::Green);
 
-    sdlWindow = SDL_CreateWindow("Grapple",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        screenWidth, screenHeight, SDL_WINDOW_FULLSCREEN_DESKTOP);
-    if (!sdlWindow) {
-        std::cerr << "Unable to create window\n";
-        exit(1);
-    }
-    renderer = SDL_CreateRenderer(sdlWindow, -1, SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+    while (window.isOpen())
+    {
+        sf::Event event;
+        while (window.pollEvent(event))
+        {
+            if (event.type == sf::Event::Closed)
+                window.close();
+        }
 
-    mFps = 60.0f;
-    mMaxSpf = 1 / mFps;
-    std::chrono::high_resolution_clock::time_point previousTime = std::chrono::high_resolution_clock::now();
-    while(running) {
-        flushEvents();
-        std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<float> delta = std::chrono::duration_cast<std::chrono::duration<float>>(now - previousTime);
-        previousTime = now;
-        float dt = delta.count();
-        if (dt < EPSILON) dt = EPSILON;
-        if (dt > mMaxSpf) dt = mMaxSpf;
-        float dx = dt / TARGET_SPF;
-        update(dt, dx);
-        draw();
-        float fps = 1 / delta.count();
-        fps = fps < MAX_DISPLAY_FPS ? fps : MAX_DISPLAY_FPS;
-        mFps = mFps * FPS_SMOOTHNESS + fps * FPS_ONE_FRAME_WEIGHT;
+        window.clear();
+        window.draw(shape);
+        window.display();
     }
 
     return 0;
-}
-
-void MainWindow::flushEvents()
-{
-    SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-        switch (e.type) {
-            case SDL_QUIT:
-            running = false;
-            break;
-        }
-    }
-}
-
-void MainWindow::draw()
-{
-    SDL_RenderClear(renderer);
-    SDL_RenderPresent(renderer);
-}
-
-void MainWindow::update(float dt, float dx)
-{
-
 }

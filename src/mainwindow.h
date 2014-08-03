@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL_joystick.h>
 #include <SDL2/SDL.h>
+#include <Box2D/Box2D.h>
 
 
 class MainWindow
@@ -13,19 +14,6 @@ public:
     int start();
 
 private:
-    int screenWidth = 1920;
-    int screenHeight = 1080;
-    SDL_Window *sdlWindow = NULL;
-    bool running = true;
-    SDL_Renderer *renderer = NULL;
-    float mMaxSpf;
-    float mFps;
-
-
-
-    void flushEvents();
-    void draw();
-    void update(float dt, float dx);
 
 
 };

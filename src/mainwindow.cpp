@@ -2,14 +2,9 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 
-
-static const float EPSILON = 0.0000000001;
-static const float MAX_DISPLAY_FPS = 90000;
-static const float TARGET_FPS = 60.0;
-static const float TARGET_SPF = 1.0 / TARGET_FPS;
-static const float FPS_SMOOTHNESS = 0.9;
-static const float FPS_ONE_FRAME_WEIGHT = 1.0 - FPS_SMOOTHNESS;
-
+static float pixelsPerMeter = 10.0f;
+static int windowWidth = 1920;
+static int windowHeight = 1080;
 
 MainWindow::MainWindow()
 {
@@ -17,7 +12,16 @@ MainWindow::MainWindow()
 
 int MainWindow::start()
 {
-    sf::RenderWindow window(sf::VideoMode(200, 200), "SFML works!");
+    sf::RenderWindow window(sf::VideoMode(windowWidth, windowHeight), "Grapple", sf::Style::Fullscreen);
+    window.setVerticalSyncEnabled(true);
+
+    arenaWidth = fromPixels(windowWidth);
+    arenaHeight = fromPixels(windowHeight);
+
+    // let's define a view
+    sf::View view(sf::FloatRect(0, 0, arenaWidth, arenaHeight));
+    window.setView(view);
+
     sf::CircleShape shape(100.f);
     shape.setFillColor(sf::Color::Green);
 
@@ -26,8 +30,22 @@ int MainWindow::start()
         sf::Event event;
         while (window.pollEvent(event))
         {
-            if (event.type == sf::Event::Closed)
+            switch (event.type) {
+            case sf::Event::Closed:
                 window.close();
+                break;
+            case sf::Event::KeyPressed:
+                switch (event.key.code) {
+                case sf::Keyboard::Escape:
+                    window.close();
+                    break;
+                default:
+                    break;
+                }
+                break;
+            default:
+                break;
+            }
         }
 
         window.clear();
@@ -36,4 +54,14 @@ int MainWindow::start()
     }
 
     return 0;
+}
+
+float MainWindow::fromPixels(float pixels)
+{
+    return pixels / pixelsPerMeter;
+}
+
+float MainWindow::toPixels(float meters)
+{
+    return meters * pixelsPerMeter;
 }

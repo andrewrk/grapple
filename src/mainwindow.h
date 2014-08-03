@@ -15,7 +15,12 @@ public:
 
 private:
 
+    // in meters
+    float arenaWidth;
+    float arenaHeight;
 
+    static float fromPixels(float pixels);
+    static float toPixels(float meters);
 };
 
 #endif // MAINWINDOW_H

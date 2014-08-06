@@ -5,6 +5,8 @@
 #include <SDL2/SDL.h>
 #include <Box2D/Box2D.h>
 
+#include <rucksack.h>
+
 
 class MainWindow
 {
@@ -36,6 +38,8 @@ private:
 
     b2World *world;
     std::vector<Player*> players;
+
+    RuckSackBundle *bundle;
 
     static float fromPixels(float pixels);
     static float toPixels(float meters);

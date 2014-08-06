@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <iostream>
 #include <SFML/Graphics.hpp>
+#include "tmxparser/Tmx.h"
 
 static float pixelsPerMeter = 10.0f;
 static int windowWidth = 1920;
@@ -31,6 +32,12 @@ void MainWindow::Player::resetButtons()
 
 int MainWindow::start()
 {
+    int err = rucksack_bundle_open("assets.bundle", &bundle);
+    if (err != RuckSackErrorNone) {
+        std::cerr << "Error opening rucksack bundle: " << rucksack_err_str(err) << "\n";
+        return -1;
+    }
+
     sf::RenderWindow window(sf::VideoMode(windowWidth, windowHeight), "Grapple", sf::Style::Fullscreen);
     window.setVerticalSyncEnabled(true);
     float timeStep = 1.0f/60.0f;
@@ -96,6 +103,8 @@ float MainWindow::toPixels(float meters)
 
 void MainWindow::loadMap()
 {
-    //Map *map = loadTmx("basic.tmx");
+//    Tmx::Map *map = new Tmx::Map();
+//    map->ParseText();
+//    Map *map = loadTmx("basic.tmx");
 
 }

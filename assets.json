@@ -1,0 +1,23 @@
+{
+  globFiles: [
+    {
+      path: "assets/text",
+      glob: "*",
+      prefix: "text/",
+    },
+  ],
+  textures: {
+    spritesheet: {
+      images: {
+        man: {
+          path: "assets/img/man.png",
+          anchor: "center",
+        },
+        graybox: {
+          path: "assets/img/graybox.png",
+          anchor: "topleft",
+        },
+      },
+    }
+  }
+}

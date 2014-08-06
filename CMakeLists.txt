@@ -19,15 +19,31 @@ else(BOX2D_FOUND)
   set(STATUS_BOX2D "not found")
 endif(BOX2D_FOUND)
 
+find_package(tmxparser)
+if(TMXPARSER_FOUND)
+  set(STATUS_TMXPARSER "OK")
+else(TMXPARSER_FOUND)
+  set(STATUS_TMXPARSER "not found")
+endif(TMXPARSER_FOUND)
+
 add_executable(grapple ${SOURCES} ${HEADERS})
 set_target_properties(grapple PROPERTIES
   COMPILE_FLAGS "-std=c++11 -pedantic -Werror -Wall -g")
-target_link_libraries(grapple ${SFML_LIBRARIES} ${BOX2D_LIBRARY})
-include_directories(${SFML_INCLUDE_DIR} ${BOX2D_INCLUDE_DIR})
+target_link_libraries(grapple
+  ${SFML_LIBRARIES}
+  ${BOX2D_LIBRARY}
+  ${TMXPARSER_LIBRARIES}
+  )
+include_directories(
+  ${SFML_INCLUDE_DIR}
+  ${BOX2D_INCLUDE_DIR}
+  ${TMXPARSER_INCLUDE_DIR}
+  )
 
 message(
 "System Dependencies\n"
 "-------------------\n"
 "* SFML                         : ${STATUS_SFML}\n"
 "* Box2D                        : ${STATUS_BOX2D}\n"
+"* tmxparser                    : ${STATUS_TMXPARSER}\n"
 )

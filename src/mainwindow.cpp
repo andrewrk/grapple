@@ -10,20 +10,44 @@ MainWindow::MainWindow()
 {
 }
 
+MainWindow::~MainWindow()
+{
+    delete world;
+}
+
+MainWindow::Player::Player(int index)
+{
+    this->index = index;
+    resetButtons();
+}
+
+void MainWindow::Player::resetButtons()
+{
+    xAxis = 0.0f;
+    yAxis = 0.0f;
+    btnPrimary = false;
+    btnAlt = false;
+}
+
 int MainWindow::start()
 {
     sf::RenderWindow window(sf::VideoMode(windowWidth, windowHeight), "Grapple", sf::Style::Fullscreen);
     window.setVerticalSyncEnabled(true);
+    float timeStep = 1.0f/60.0f;
 
     arenaWidth = fromPixels(windowWidth);
     arenaHeight = fromPixels(windowHeight);
 
-    // let's define a view
+    world = new b2World(b2Vec2(0, 10));
+    players.push_back(new Player(0));
+    players.push_back(new Player(1));
+    players.push_back(new Player(2));
+    players.push_back(new Player(3));
+
+    loadMap();
+
     sf::View view(sf::FloatRect(0, 0, arenaWidth, arenaHeight));
     window.setView(view);
-
-    sf::CircleShape shape(100.f);
-    shape.setFillColor(sf::Color::Green);
 
     while (window.isOpen())
     {
@@ -48,8 +72,12 @@ int MainWindow::start()
             }
         }
 
+        world->Step(timeStep, 8, 3);
+        world->ClearForces();
+
         window.clear();
-        window.draw(shape);
+
+
         window.display();
     }
 
@@ -64,4 +92,10 @@ float MainWindow::fromPixels(float pixels)
 float MainWindow::toPixels(float meters)
 {
     return meters * pixelsPerMeter;
+}
+
+void MainWindow::loadMap()
+{
+    //Map *map = loadTmx("basic.tmx");
+
 }

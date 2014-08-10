@@ -8,16 +8,20 @@
   ],
   textures: {
     spritesheet: {
-      images: {
-        man: {
-          path: "assets/img/man.png",
-          anchor: "center",
+      maxWidth: 512,
+      maxHeight: 512,
+      // sadly we have to disable this until
+      // https://github.com/LaurentGomila/SFML/issues/676
+      // is resolved.
+      allowRotate90: false,
+
+      globImages: [
+        {
+          path: "assets/img/",
+          glob: "*",
+          prefix: "img/",
         },
-        graybox: {
-          path: "assets/img/graybox.png",
-          anchor: "topleft",
-        },
-      },
+      ],
     }
   }
 }

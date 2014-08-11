@@ -23,17 +23,13 @@ static float joyAxis(int index, sf::Joystick::Axis axis) {
     return (fabsf(val) < deadZoneThreshold) ? 0.0f : val;
 }
 
-/*
-static float sign(float x) {
-    if (x > 0) {
-        return 1.0f;
-    } else if (x < 0) {
+static float signe(float x) {
+    if (x < 0) {
         return -1.0f;
     } else {
-        return 0.0f;
+        return 1.0f;
     }
 }
-*/
 
 MainWindow::MainWindow()
 {
@@ -222,6 +218,10 @@ int MainWindow::start()
                 curVel.y = -maxJumpSpeed;
             }
             player->body->SetLinearVelocity(curVel);
+
+            sf::Vector2f scale = player->sprite.getScale();
+            scale.x = fabsf(scale.x) * signe(player->xAxis);
+            player->sprite.setScale(scale);
 
             Animation *currentAnim = NULL;
             bool loop = true;

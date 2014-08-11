@@ -29,6 +29,7 @@ private:
         bool btnAlt;
         sf::Sprite sprite;
         b2Body *body;
+        int footContacts;
 
         Player(int index);
         void resetButtons();
@@ -38,6 +39,14 @@ private:
     public:
         sf::Sprite sprite;
         b2Body *body;
+    };
+
+    class GlobalContactListener : public b2ContactListener {
+    public:
+        virtual void BeginContact(b2Contact* contact) override;
+        virtual void EndContact(b2Contact* contact) override;
+        MainWindow *window;
+        GlobalContactListener(MainWindow *window) : window(window){}
     };
 
     // in meters
@@ -70,6 +79,7 @@ private:
 
     sf::IntRect imageInfoToTextureRect(RuckSackImage *imageInfo);
 
+    friend class GlobalContactListener;
 };
 
 #endif // MAINWINDOW_H

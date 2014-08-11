@@ -7,9 +7,10 @@ static int windowWidth = 1920;
 static int windowHeight = 1080;
 
 static float deadZoneThreshold = 0.20f;
-static float instantStopThreshold = 0.1f;
-static float playerMoveForceX = 1200.0f;
 static float maxPlayerSpeed = 20.0f;
+static float maxJumpSpeed = 40.0f;
+static b2Vec2 playerJumpForce(0.0f, -28000.0f);
+
 
 static float PI = 3.14159265358979f;
 
@@ -21,6 +22,18 @@ static float joyAxis(int index, sf::Joystick::Axis axis) {
     float val = sf::Joystick::getAxisPosition(index, axis) / 100.0f;
     return (fabsf(val) < deadZoneThreshold) ? 0.0f : val;
 }
+
+/*
+static float sign(float x) {
+    if (x > 0) {
+        return 1.0f;
+    } else if (x < 0) {
+        return -1.0f;
+    } else {
+        return 0.0f;
+    }
+}
+*/
 
 MainWindow::MainWindow()
 {
@@ -35,6 +48,7 @@ MainWindow::~MainWindow()
 MainWindow::Player::Player(int index)
 {
     this->index = index;
+    footContacts = 0;
     resetButtons();
 }
 
@@ -105,7 +119,9 @@ int MainWindow::start()
     physDebugText.setScale(fromPixels(1), fromPixels(1));
     physDebugText.setPosition(0, arenaHeight - fromPixels(20));
 
-    world = new b2World(b2Vec2(0, 10));
+    world = new b2World(b2Vec2(0, 100));
+    GlobalContactListener *listener = new GlobalContactListener(this);
+    world->SetContactListener(listener);
     players.push_back(new Player(0));
     players.push_back(new Player(1));
     players.push_back(new Player(2));
@@ -165,20 +181,17 @@ int MainWindow::start()
                 player->btnPrimary = sf::Joystick::isButtonPressed(i, 0);
                 player->btnAlt = sf::Joystick::isButtonPressed(i, 1);
             }
+            b2Vec2 curVel = player->body->GetLinearVelocity();
             if (i == 0) {
                 std::stringstream ss;
-                ss << "xAxis: " << player->xAxis;
+                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts;
                 physDebugText.setString(ss.str());
             }
-            b2Vec2 curVel = player->body->GetLinearVelocity();
             float desiredVelX = player->xAxis * maxPlayerSpeed;
-            if (desiredVelX == 0 && fabsf(curVel.x) < instantStopThreshold) {
-                curVel.x = 0;
-                player->body->SetLinearVelocity(curVel);
-            } else if (curVel.x < desiredVelX) {
-                player->body->ApplyForce(b2Vec2(playerMoveForceX, 0), player->body->GetWorldCenter(), true);
-            } else if (curVel.x > desiredVelX) {
-                player->body->ApplyForce(b2Vec2(-playerMoveForceX, 0), player->body->GetWorldCenter(), true);
+            curVel.x = desiredVelX;
+            player->body->SetLinearVelocity(curVel);
+            if (player->btnPrimary && curVel.y > -maxJumpSpeed) {
+              player->body->ApplyForce(playerJumpForce, player->body->GetWorldCenter(), true);
             }
         }
 
@@ -309,10 +322,44 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     player->body = world->CreateBody(&bodyDef);
     player->body->SetFixedRotation(true);
     b2PolygonShape shape;
-    shape.SetAsBox(fromPixels(imageInfo->width) / 2, fromPixels(imageInfo->height) / 2);
+    shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f, fromPixels(imageInfo->height) / 2.0f);
     b2FixtureDef fixtureDef;
     fixtureDef.shape = &shape;
-    fixtureDef.density = 1.0;
-    fixtureDef.friction = 0.5;
+    fixtureDef.density = 1.0f;
+    fixtureDef.friction = 0.0f;
     player->body->CreateFixture(&fixtureDef);
+
+    shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f - 0.01f, 0.3f, b2Vec2(0, fromPixels(imageInfo->height) / 2.0f), 0.0f);
+    fixtureDef.isSensor = true;
+    b2Fixture *sensor = player->body->CreateFixture(&fixtureDef);
+    sensor->SetUserData(player);
+}
+
+
+void MainWindow::GlobalContactListener::BeginContact(b2Contact *contact)
+{
+    Player *player;
+
+    player = (Player*) contact->GetFixtureA()->GetUserData();
+    if (player)
+        player->footContacts += 1;
+
+
+    player = (Player*) contact->GetFixtureB()->GetUserData();
+    if (player)
+        player->footContacts += 1;
+}
+
+void MainWindow::GlobalContactListener::EndContact(b2Contact *contact)
+{
+    Player *player;
+
+    player = (Player*) contact->GetFixtureA()->GetUserData();
+    if (player)
+        player->footContacts -= 1;
+
+
+    player = (Player*) contact->GetFixtureB()->GetUserData();
+    if (player)
+        player->footContacts -= 1;
 }

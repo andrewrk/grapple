@@ -28,7 +28,7 @@
   </object>
   <object name="Start" x="336" y="368" width="32" height="32">
    <properties>
-    <property name="player" value="1"/>
+    <property name="player" value="2"/>
    </properties>
   </object>
   <object name="Start" x="1416" y="376" width="32" height="32">
@@ -38,7 +38,7 @@
   </object>
   <object name="Start" x="1680" y="1000" width="32" height="32">
    <properties>
-    <property name="player" value="2"/>
+    <property name="player" value="1"/>
    </properties>
   </object>
   <object name="Platform" x="0" y="1040" width="1912" height="32">

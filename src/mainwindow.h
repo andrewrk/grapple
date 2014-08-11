@@ -26,6 +26,7 @@ private:
     enum FixtureIdentType {
         FootSensorFixture,
         ClawFixture,
+        PlayerFixture,
     };
 
     class Player;
@@ -52,19 +53,24 @@ private:
         AnimatedSprite sprite;
         sf::Sprite armSprite;
         sf::Sprite clawSprite;
-        ClawState clawState;
-        b2Body *clawBody;
+        ClawState clawState = ClawStateAir;
+        b2Body *clawBody = NULL;
         FixtureIdent clawFixtureUserData;
         FixtureIdent footSensorUserData;
+        FixtureIdent playerBodyUserData;
         b2Vec2 aimStartPos; // where the claw will be created
+        b2Vec2 aimUnit; // unit vector pointing where aiming
         b2Vec2 localAnchorPos;
         b2Vec2 clawLocalAnchorPos;
-        b2RopeJoint *ropeJoint;
+        b2RopeJoint *ropeJoint = NULL;
+        b2RevoluteJoint *revoluteJoint = NULL;
+        b2RevoluteJointDef revoluteJointDef;
+        bool queueRevoluteJoint = false;
 
         b2Body *body;
-        int footContacts;
-        int jumpFrameCount;
-        float armRotateOffset;
+        int footContacts = 0;
+        int jumpFrameCount = 0;
+        float armRotateOffset = 0;
 
         Player(int index, MainWindow *window);
         void resetButtons();
@@ -76,10 +82,11 @@ private:
         b2Body *body;
     };
 
-    class GlobalContactListener : public b2ContactListener {
+    class GlobalContactListener : public b2ContactListener, public b2ContactFilter {
     public:
         virtual void BeginContact(b2Contact* contact) override;
         virtual void EndContact(b2Contact* contact) override;
+        virtual bool ShouldCollide(b2Fixture *fixtureA, b2Fixture *fixtureB) override;
         MainWindow *window;
         GlobalContactListener(MainWindow *window) : window(window){}
     };
@@ -115,6 +122,8 @@ private:
     sf::IntRect armFlungRect;
     sf::IntRect armNormalRect;
 
+
+
     sf::Color ropeColor;
 
     static float fromPixels(float pixels);
@@ -131,7 +140,7 @@ private:
 
     void loadAnimation(Animation &animation, const std::vector<std::string> &list);
 
-    void handleClawHit(Player *player, b2Contact *contact, b2Fixture *clawFixture);
+    void handleClawHit(Player *player, b2Contact *contact, b2Fixture *clawFixture, b2Fixture *otherFixture);
     void setPlayerClawState(Player *player, ClawState state);
 
     friend class GlobalContactListener;

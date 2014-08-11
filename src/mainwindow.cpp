@@ -46,12 +46,6 @@ MainWindow::~MainWindow()
 MainWindow::Player::Player(int i, MainWindow *window)
 {
     index = i;
-    footContacts = 0;
-    jumpFrameCount = 0;
-    armRotateOffset = 0;
-    clawState = ClawStateAir;
-    clawBody = NULL;
-    ropeJoint = NULL;
     sprite.setFrameTime(sf::seconds(0.1f));
 
     clawFixtureUserData.window = window;
@@ -61,6 +55,12 @@ MainWindow::Player::Player(int i, MainWindow *window)
     footSensorUserData.window = window;
     footSensorUserData.type = FootSensorFixture;
     footSensorUserData.player = this;
+
+    playerBodyUserData.window = window;
+    playerBodyUserData.type = PlayerFixture;
+    playerBodyUserData.player = this;
+
+    aimUnit.Set(1, 0);
 
     resetButtons();
 }
@@ -158,6 +158,7 @@ int MainWindow::start()
     world = new b2World(b2Vec2(0, 10));
     GlobalContactListener *listener = new GlobalContactListener(this);
     world->SetContactListener(listener);
+    world->SetContactFilter(listener);
     players.push_back(new Player(0, this));
     players.push_back(new Player(1, this));
     players.push_back(new Player(2, this));
@@ -203,6 +204,15 @@ int MainWindow::start()
 
         sf::Time frameTime = frameClock.restart();
 
+        for (int i = 0; i < (int)players.size(); i += 1) {
+            Player *player = players[i];
+            if (player->queueRevoluteJoint) {
+                player->queueRevoluteJoint = false;
+                player->revoluteJoint = (b2RevoluteJoint *) world->CreateJoint(&player->revoluteJointDef);
+            }
+        }
+
+
         world->Step(timeStep, 8, 3);
         world->ClearForces();
 
@@ -246,18 +256,19 @@ int MainWindow::start()
                 armScale.x = fabsf(armScale.x) * scaleSign;
                 player->armRotateOffset = (scaleSign == -1.0f) ? M_PI : 0;
                 player->armSprite.setScale(armScale);
-            }
 
-            b2Vec2 unit(player->xAxis, player->yAxis);
-            unit.Normalize();
-            player->aimStartPos.Set(pos.x + unit.x * armLength, pos.y + unit.y * armLength);
+                player->aimUnit.Set(player->xAxis, player->yAxis);
+                player->aimUnit.Normalize();
+            }
+            player->aimStartPos.Set(pos.x + player->aimUnit.x * armLength, pos.y + player->aimUnit.y * armLength);
+
 
             if (player->btnAlt && !player->clawBody) {
                 b2BodyDef bodyDef;
                 bodyDef.type = b2_dynamicBody;
                 bodyDef.position.Set(player->aimStartPos.x, player->aimStartPos.y);
                 bodyDef.angle = atan2(player->yAxis, player->xAxis);
-                bodyDef.linearVelocity.Set(curVel.x + unit.x * clawShootSpeed, curVel.y + unit.y * clawShootSpeed);
+                bodyDef.linearVelocity.Set(curVel.x + player->aimUnit.x * clawShootSpeed, curVel.y + player->aimUnit.y * clawShootSpeed);
                 bodyDef.bullet = true;
                 player->clawBody = world->CreateBody(&bodyDef);
                 player->clawBody->SetFixedRotation(true);
@@ -265,7 +276,7 @@ int MainWindow::start()
                 shape.m_radius = clawRadius;
                 b2FixtureDef fixtureDef;
                 fixtureDef.shape = &shape;
-                fixtureDef.density = 4.0f;
+                fixtureDef.density = 8.0f;
                 fixtureDef.friction = 0.0f;
                 fixtureDef.restitution = 0.0f;
                 fixtureDef.userData = &player->clawFixtureUserData;
@@ -427,11 +438,32 @@ void MainWindow::loadAnimation(Animation &animation, const std::vector<std::stri
     }
 }
 
-void MainWindow::handleClawHit(MainWindow::Player *player, b2Contact *contact, b2Fixture *clawFixture)
+void MainWindow::handleClawHit(MainWindow::Player *player, b2Contact *contact, b2Fixture *clawFixture, b2Fixture *otherFixture)
 {
     // note we're not allowed to alter the physics world in this callback function.
 
-    std::cout << "claw hit something\n";
+    if (player->clawState != ClawStateAir)
+        return;
+
+    // find the contact point
+    b2WorldManifold worldManifold;
+    contact->GetWorldManifold(&worldManifold);
+    b2Vec2 worldPoint = worldManifold.points[0];
+    b2Vec2 otherFixturePos = otherFixture->GetBody()->GetPosition();
+
+    setPlayerClawState(player, ClawStateAttached);
+    player->revoluteJointDef.bodyA = clawFixture->GetBody();
+    player->revoluteJointDef.bodyB = otherFixture->GetBody();
+    player->revoluteJointDef.collideConnected = false;
+    player->revoluteJointDef.localAnchorA.Set(player->clawLocalAnchorPos.x, player->clawLocalAnchorPos.y);
+    player->revoluteJointDef.localAnchorB.Set(worldPoint.x - otherFixturePos.x, worldPoint.y - otherFixturePos.y);
+    player->revoluteJointDef.referenceAngle = 0.0f;
+    player->revoluteJointDef.lowerAngle = 0.0f;
+    player->revoluteJointDef.upperAngle = 0.0f;
+    player->revoluteJointDef.enableLimit = true;
+    player->revoluteJointDef.enableMotor = false;
+
+    player->queueRevoluteJoint = true;
 }
 
 void MainWindow::setPlayerClawState(MainWindow::Player *player, MainWindow::ClawState state)
@@ -524,6 +556,7 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     fixtureDef.shape = &shape;
     fixtureDef.density = 1.0f;
     fixtureDef.friction = 0.0f;
+    fixtureDef.userData = &player->playerBodyUserData;
     player->body->CreateFixture(&fixtureDef);
 
     shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f - 0.001f, 0.3f, b2Vec2(0, fromPixels(imageInfo->height) / 2.0f), 0.0f);
@@ -538,6 +571,8 @@ void MainWindow::GlobalContactListener::BeginContact(b2Contact *contact)
     FixtureIdent *fixtureIdent;
 
     b2Fixture *fixtureA = contact->GetFixtureA();
+    b2Fixture *fixtureB = contact->GetFixtureB();
+
     fixtureIdent = (FixtureIdent*) fixtureA->GetUserData();
     if (fixtureIdent) {
         switch (fixtureIdent->type) {
@@ -545,12 +580,13 @@ void MainWindow::GlobalContactListener::BeginContact(b2Contact *contact)
             fixtureIdent->player->footContacts += 1;
             break;
         case ClawFixture:
-            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureA);
+            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureA, fixtureB);
+            break;
+        case PlayerFixture:
             break;
         }
     }
 
-    b2Fixture *fixtureB = contact->GetFixtureB();
     fixtureIdent = (FixtureIdent*) fixtureB->GetUserData();
     if (fixtureIdent) {
         switch (fixtureIdent->type) {
@@ -558,7 +594,9 @@ void MainWindow::GlobalContactListener::BeginContact(b2Contact *contact)
             fixtureIdent->player->footContacts += 1;
             break;
         case ClawFixture:
-            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureB);
+            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureB, fixtureA);
+            break;
+        case PlayerFixture:
             break;
         }
     }
@@ -578,6 +616,8 @@ void MainWindow::GlobalContactListener::EndContact(b2Contact *contact)
         case ClawFixture:
             // nothing to do here
             break;
+        case PlayerFixture:
+            break;
         }
     }
 
@@ -591,6 +631,19 @@ void MainWindow::GlobalContactListener::EndContact(b2Contact *contact)
         case ClawFixture:
             // nothing to do here
             break;
+        case PlayerFixture:
+            break;
         }
     }
+}
+
+bool MainWindow::GlobalContactListener::ShouldCollide(b2Fixture *fixtureA, b2Fixture *fixtureB)
+{
+    FixtureIdent *fixtureIdentA = (FixtureIdent*) fixtureA->GetUserData();
+    FixtureIdent *fixtureIdentB = (FixtureIdent*) fixtureB->GetUserData();
+
+    if (!fixtureIdentA || !fixtureIdentB)
+        return true;
+
+    return fixtureIdentA->player != fixtureIdentB->player;
 }

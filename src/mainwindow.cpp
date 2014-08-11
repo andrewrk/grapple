@@ -3,6 +3,10 @@
 #include <sstream>
 #include <cmath>
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
+
 static float pixelsPerMeter = 100.0f;
 static int windowWidth = 1920;
 static int windowHeight = 1080;
@@ -12,6 +16,8 @@ static float maxPlayerSpeed = 2.0f;
 static float maxJumpSpeed = 4.0f;
 static int maxJumpFrames = 14;
 static float clawShootSpeed = 20.0f;
+static float minClawDist = 0.5f;
+static float clawReelInSpeed = 0.05f;
 
 
 static float toDegrees(float radians) {
@@ -69,8 +75,8 @@ void MainWindow::Player::resetButtons()
 {
     xAxis = 0.0f;
     yAxis = 0.0f;
-    btnPrimary = false;
-    btnAlt = false;
+    btnJump = false;
+    btnFireGrapple = false;
 }
 
 int MainWindow::start()
@@ -227,15 +233,15 @@ int MainWindow::start()
             if (sf::Joystick::isConnected(i)) {
                 player->xAxis = joyAxis(i, sf::Joystick::X);
                 player->yAxis = joyAxis(i, sf::Joystick::Y);
-                player->btnPrimary = sf::Joystick::isButtonPressed(i, 0);
-                player->btnAlt = sf::Joystick::isButtonPressed(i, 2);
+                player->btnJump = sf::Joystick::isButtonPressed(i, 0);
+                player->btnFireGrapple = sf::Joystick::isButtonPressed(i, 2);
             }
             b2Vec2 curVel = player->body->GetLinearVelocity();
 
             curVel.x = player->xAxis * maxPlayerSpeed;
-            if (player->btnPrimary && player->footContacts > 0) {
+            if (player->btnJump && player->footContacts > 0) {
                 player->jumpFrameCount = 1;
-            } else if (!player->btnPrimary && player->jumpFrameCount > 0) {
+            } else if (!player->btnJump && player->jumpFrameCount > 0) {
                 player->jumpFrameCount = 0;
             }
             if (player->jumpFrameCount > maxJumpFrames) {
@@ -263,7 +269,7 @@ int MainWindow::start()
             player->aimStartPos.Set(pos.x + player->aimUnit.x * armLength, pos.y + player->aimUnit.y * armLength);
 
 
-            if (player->btnAlt && !player->clawBody) {
+            if (player->btnFireGrapple && player->clawState == ClawStateRetracted) {
                 b2BodyDef bodyDef;
                 bodyDef.type = b2_dynamicBody;
                 bodyDef.position.Set(player->aimStartPos.x, player->aimStartPos.y);
@@ -292,12 +298,33 @@ int MainWindow::start()
                 player->ropeJoint = (b2RopeJoint *) world->CreateJoint(&ropeJointDef);
 
                 setPlayerClawState(player, ClawStateAir);
-            }
+            } else if (player->btnFireGrapple && player->clawState == ClawStateAttached) {
+                b2Vec2 clawPos = player->clawBody->GetPosition();
+                float clawDist = (clawPos - pos).Length();
+                if (clawDist <= minClawDist) {
+                    // TODO retract claw
+                } else {
+                    // prevent the claw from going back out once it goes in
+                    float currentLength = player->ropeJoint->GetMaxLength();
+                    float autoDelta = currentLength - clawDist;
+                    float delta = MAX(autoDelta, clawReelInSpeed);
+                    float newMax = MAX(currentLength - delta, minClawDist);
+                    world->DestroyJoint(player->ropeJoint);
+                    b2RopeJointDef ropeJointDef;
+                    ropeJointDef.bodyA = player->body;
+                    ropeJointDef.bodyB = player->clawBody;
+                    ropeJointDef.collideConnected = true;
+                    ropeJointDef.localAnchorA = player->localAnchorPos;
+                    ropeJointDef.localAnchorB = player->clawLocalAnchorPos;
+                    ropeJointDef.maxLength = newMax;
+                    player->ropeJoint = (b2RopeJoint *) world->CreateJoint(&ropeJointDef);
 
-            if (i == 0) {
-                std::stringstream ss;
-                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts;
-                physDebugText.setString(ss.str());
+                    if (i == 0) {
+                        std::stringstream ss;
+                        ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts << " newMax: " << newMax;
+                        physDebugText.setString(ss.str());
+                    }
+                }
             }
 
             Animation *currentAnim = NULL;
@@ -332,7 +359,7 @@ int MainWindow::start()
             player->sprite.update(frameTime);
             window.draw(player->sprite);
             window.draw(player->armSprite);
-            if (player->clawBody) {
+            if (player->clawState != ClawStateRetracted) {
                 b2Vec2 clawPos = player->clawBody->GetPosition();
                 player->clawSprite.setPosition(clawPos.x, clawPos.y);
                 player->clawSprite.setRotation(toDegrees(player->clawBody->GetAngle()));

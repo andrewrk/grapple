@@ -48,12 +48,12 @@ private:
         int index;
         float xAxis;
         float yAxis;
-        bool btnPrimary;
-        bool btnAlt;
+        bool btnJump;
+        bool btnFireGrapple;
         AnimatedSprite sprite;
         sf::Sprite armSprite;
         sf::Sprite clawSprite;
-        ClawState clawState = ClawStateAir;
+        ClawState clawState = ClawStateRetracted;
         b2Body *clawBody = NULL;
         FixtureIdent clawFixtureUserData;
         FixtureIdent footSensorUserData;

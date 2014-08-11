@@ -144,6 +144,7 @@ int MainWindow::start()
     arenaWidth = fromPixels(windowWidth);
     arenaHeight = fromPixels(windowHeight);
     armLength = fromPixels(50.0f);
+    ropeColor = sf::Color(255, 255, 0);
 
     int textHeight = 20;
     physDebugText.setFont(font);
@@ -246,14 +247,14 @@ int MainWindow::start()
                 player->armSprite.setScale(armScale);
             }
 
+            b2Vec2 unit(player->xAxis, player->yAxis);
+            unit.Normalize();
+            player->aimStartPos.Set(pos.x + unit.x * armLength, pos.y + unit.y * armLength);
+
             if (player->btnAlt && !player->clawBody) {
-
-                b2Vec2 unit(player->xAxis, player->yAxis);
-                unit.Normalize();
-
                 b2BodyDef bodyDef;
                 bodyDef.type = b2_dynamicBody;
-                bodyDef.position.Set(pos.x + unit.x * armLength, pos.y + unit.y * armLength);
+                bodyDef.position.Set(player->aimStartPos.x, player->aimStartPos.y);
                 bodyDef.angle = atan2(player->yAxis, player->xAxis);
                 bodyDef.linearVelocity.Set(curVel.x + unit.x * clawShootSpeed, curVel.y + unit.y * clawShootSpeed);
                 bodyDef.bullet = true;
@@ -316,6 +317,14 @@ int MainWindow::start()
                 player->clawSprite.setPosition(clawPos.x, clawPos.y);
                 player->clawSprite.setRotation(toDegrees(player->clawBody->GetAngle()));
                 window.draw(player->clawSprite);
+
+                sf::Vertex line[] =
+                {
+                    sf::Vertex(sf::Vector2f(player->aimStartPos.x, player->aimStartPos.y), ropeColor),
+                    sf::Vertex(sf::Vector2f(clawPos.x, clawPos.y), ropeColor)
+                };
+
+                window.draw(line, 2, sf::Lines);
             }
         }
         window.draw(physDebugText);

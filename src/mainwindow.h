@@ -49,6 +49,7 @@ private:
         b2Body *clawBody;
         FixtureIdent clawFixtureUserData;
         FixtureIdent footSensorUserData;
+        b2Vec2 aimStartPos; // where the claw will be created
 
         b2Body *body;
         int footContacts;
@@ -100,6 +101,8 @@ private:
     sf::IntRect clawClosedRect;
     float clawRadius;
     float armLength;
+
+    sf::Color ropeColor;
 
     static float fromPixels(float pixels);
     static float toPixels(float meters);

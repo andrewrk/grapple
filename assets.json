@@ -49,11 +49,9 @@
         },
         "img/claw.png": {
           path: "assets/img/claw.png",
-          anchor: "right",
         },
         "img/claw-retracted.png": {
           path: "assets/img/claw-retracted.png",
-          anchor: "right",
         },
       },
     }

@@ -9,7 +9,7 @@ static int windowHeight = 1080;
 static float deadZoneThreshold = 0.20f;
 static float maxPlayerSpeed = 20.0f;
 static float maxJumpSpeed = 40.0f;
-static b2Vec2 playerJumpForce(0.0f, -28000.0f);
+static int maxJumpFrames = 14;
 
 
 static float PI = 3.14159265358979f;
@@ -49,6 +49,7 @@ MainWindow::Player::Player(int index)
 {
     this->index = index;
     footContacts = 0;
+    jumpFrameCount = 0;
     resetButtons();
 }
 
@@ -187,12 +188,19 @@ int MainWindow::start()
                 ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts;
                 physDebugText.setString(ss.str());
             }
-            float desiredVelX = player->xAxis * maxPlayerSpeed;
-            curVel.x = desiredVelX;
-            player->body->SetLinearVelocity(curVel);
-            if (player->btnPrimary && curVel.y > -maxJumpSpeed) {
-              player->body->ApplyForce(playerJumpForce, player->body->GetWorldCenter(), true);
+            curVel.x = player->xAxis * maxPlayerSpeed;
+            if (player->btnPrimary && player->footContacts > 0) {
+                player->jumpFrameCount = 1;
+            } else if (!player->btnPrimary && player->jumpFrameCount > 0) {
+                player->jumpFrameCount = 0;
             }
+            if (player->jumpFrameCount > maxJumpFrames) {
+                player->jumpFrameCount = 0;
+            } else if (player->jumpFrameCount > 0) {
+                player->jumpFrameCount += 1;
+                curVel.y = -maxJumpSpeed;
+            }
+            player->body->SetLinearVelocity(curVel);
         }
 
         for (int i = 0; i < (int)platforms.size(); i += 1) {

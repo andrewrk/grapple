@@ -30,6 +30,7 @@ private:
         sf::Sprite sprite;
         b2Body *body;
         int footContacts;
+        int jumpFrameCount;
 
         Player(int index);
         void resetButtons();

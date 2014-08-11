@@ -6,7 +6,10 @@
 
 #include <rucksack.h>
 #include <map>
-#include "tmxparser/Tmx.h"
+#include <tmxparser/Tmx.h>
+
+#include "animatedsprite.h"
+#include "animation.h"
 
 
 class MainWindow
@@ -27,7 +30,7 @@ private:
         float yAxis;
         bool btnPrimary;
         bool btnAlt;
-        sf::Sprite sprite;
+        AnimatedSprite sprite;
         b2Body *body;
         int footContacts;
         int jumpFrameCount;
@@ -65,8 +68,11 @@ private:
     sf::Font font;
     sf::Text physDebugText;
 
-
     sf::Texture spritesheet;
+    Animation walkingAnim;
+    Animation jumpingAnim;
+    Animation stillAnim;
+
 
     static float fromPixels(float pixels);
     static float toPixels(float meters);
@@ -79,6 +85,8 @@ private:
     void initPlayer(int index, b2Vec2 pos);
 
     sf::IntRect imageInfoToTextureRect(RuckSackImage *imageInfo);
+
+    void loadAnimation(Animation &animation, const std::vector<std::string> &list);
 
     friend class GlobalContactListener;
 };

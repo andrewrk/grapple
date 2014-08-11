@@ -50,6 +50,7 @@ MainWindow::Player::Player(int index)
     this->index = index;
     footContacts = 0;
     jumpFrameCount = 0;
+    sprite.setFrameTime(sf::seconds(0.1f));
     resetButtons();
 }
 
@@ -104,6 +105,27 @@ int MainWindow::start()
         imageMap[std::string(image->key, image->key_size)] = image;
     }
 
+    std::vector<std::string> animFrames;
+
+    animFrames.clear();
+    animFrames.push_back("img/walk-0.png");
+    animFrames.push_back("img/walk-1.png");
+    animFrames.push_back("img/walk-2.png");
+    animFrames.push_back("img/walk-3.png");
+    animFrames.push_back("img/walk-4.png");
+    animFrames.push_back("img/walk-5.png");
+    loadAnimation(walkingAnim, animFrames);
+
+    animFrames.clear();
+    animFrames.push_back("img/jump-0.png");
+    animFrames.push_back("img/jump-1.png");
+    animFrames.push_back("img/jump-2.png");
+    animFrames.push_back("img/jump-3.png");
+    loadAnimation(jumpingAnim, animFrames);
+
+    animFrames.clear();
+    animFrames.push_back("img/man.png");
+    loadAnimation(stillAnim, animFrames);
 
     sf::RenderWindow window(sf::VideoMode(windowWidth, windowHeight), "Grapple", sf::Style::Default);
     window.setVerticalSyncEnabled(true);
@@ -134,6 +156,7 @@ int MainWindow::start()
     sf::View view(sf::FloatRect(0, 0, arenaWidth, arenaHeight));
     window.setView(view);
 
+    sf::Clock frameClock;
     while (window.isOpen())
     {
         sf::Event event;
@@ -165,6 +188,8 @@ int MainWindow::start()
             }
         }
 
+        sf::Time frameTime = frameClock.restart();
+
         world->Step(timeStep, 8, 3);
         world->ClearForces();
 
@@ -183,11 +208,7 @@ int MainWindow::start()
                 player->btnAlt = sf::Joystick::isButtonPressed(i, 1);
             }
             b2Vec2 curVel = player->body->GetLinearVelocity();
-            if (i == 0) {
-                std::stringstream ss;
-                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts;
-                physDebugText.setString(ss.str());
-            }
+
             curVel.x = player->xAxis * maxPlayerSpeed;
             if (player->btnPrimary && player->footContacts > 0) {
                 player->jumpFrameCount = 1;
@@ -201,6 +222,29 @@ int MainWindow::start()
                 curVel.y = -maxJumpSpeed;
             }
             player->body->SetLinearVelocity(curVel);
+
+            Animation *currentAnim = NULL;
+            bool loop = true;
+            if (player->footContacts > 0) {
+                if (curVel.x != 0) {
+                    currentAnim = &walkingAnim;
+                } else {
+                    currentAnim = &stillAnim;
+                }
+            } else {
+                currentAnim = &jumpingAnim;
+                loop = false;
+            }
+            player->sprite.setLooped(loop);
+            if (player->sprite.getAnimation() != currentAnim) {
+                player->sprite.setAnimation(*currentAnim);
+                player->sprite.play();
+            }
+            if (i == 0) {
+                std::stringstream ss;
+                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts << " loop: " << loop;
+                physDebugText.setString(ss.str());
+            }
         }
 
         for (int i = 0; i < (int)platforms.size(); i += 1) {
@@ -209,6 +253,7 @@ int MainWindow::start()
         }
         for (int i = 0; i < (int)players.size(); i += 1) {
             Player *player = players[i];
+            player->sprite.update(frameTime);
             window.draw(player->sprite);
         }
         window.draw(physDebugText);
@@ -287,6 +332,21 @@ sf::IntRect MainWindow::imageInfoToTextureRect(RuckSackImage *imageInfo)
                        imageInfo->width, imageInfo->height);
 }
 
+void MainWindow::loadAnimation(Animation &animation, const std::vector<std::string> &list)
+{
+    animation.setSpriteSheet(spritesheet);
+    for (int i = 0; i < (int)list.size(); i += 1) {
+        std::string frame = list[i];
+        std::map<std::string, RuckSackImage *>::iterator it = imageMap.find(frame);
+        if (it == imageMap.end()) {
+            std::cerr << "Missing image: " << frame << "\n";
+            std::exit(1);
+        }
+        RuckSackImage *imageInfo = it->second;
+        animation.addFrame(imageInfoToTextureRect(imageInfo));
+    }
+}
+
 void MainWindow::addPlatform(b2Vec2 pos, b2Vec2 size, std::string imgName)
 {
     Platform *platform = new Platform();
@@ -317,9 +377,7 @@ void MainWindow::addPlatform(b2Vec2 pos, b2Vec2 size, std::string imgName)
 void MainWindow::initPlayer(int index, b2Vec2 pos)
 {
     Player *player = players[index];
-    player->sprite.setTexture(spritesheet);
     RuckSackImage *imageInfo = imageMap.at("img/man.png");
-    player->sprite.setTextureRect(imageInfoToTextureRect(imageInfo));
     player->sprite.setOrigin(imageInfo->anchor_x, imageInfo->anchor_y);
     player->sprite.setPosition(pos.x, pos.y);
     player->sprite.setScale(fromPixels(1), fromPixels(1));

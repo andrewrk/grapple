@@ -36,6 +36,7 @@ private:
     };
 
     enum ClawState {
+        ClawStateRetracted,
         ClawStateAir,
         ClawStateAttached,
         ClawStateDetached,
@@ -56,6 +57,9 @@ private:
         FixtureIdent clawFixtureUserData;
         FixtureIdent footSensorUserData;
         b2Vec2 aimStartPos; // where the claw will be created
+        b2Vec2 localAnchorPos;
+        b2Vec2 clawLocalAnchorPos;
+        b2RopeJoint *ropeJoint;
 
         b2Body *body;
         int footContacts;
@@ -108,6 +112,8 @@ private:
     sf::IntRect clawAttachedRect;
     float clawRadius;
     float armLength;
+    sf::IntRect armFlungRect;
+    sf::IntRect armNormalRect;
 
     sf::Color ropeColor;
 

@@ -51,6 +51,7 @@ MainWindow::Player::Player(int i, MainWindow *window)
     armRotateOffset = 0;
     clawState = ClawStateAir;
     clawBody = NULL;
+    ropeJoint = NULL;
     sprite.setFrameTime(sf::seconds(0.1f));
 
     clawFixtureUserData.window = window;
@@ -270,6 +271,15 @@ int MainWindow::start()
                 fixtureDef.userData = &player->clawFixtureUserData;
                 player->clawBody->CreateFixture(&fixtureDef);
 
+                b2RopeJointDef ropeJointDef;
+                ropeJointDef.bodyA = player->body;
+                ropeJointDef.bodyB = player->clawBody;
+                ropeJointDef.collideConnected = true;
+                ropeJointDef.localAnchorA = player->localAnchorPos;
+                ropeJointDef.localAnchorB = player->clawLocalAnchorPos;
+                ropeJointDef.maxLength = 99999999.0f; // we don't want this number to be reached
+                player->ropeJoint = (b2RopeJoint *) world->CreateJoint(&ropeJointDef);
+
                 setPlayerClawState(player, ClawStateAir);
             }
 
@@ -428,14 +438,20 @@ void MainWindow::setPlayerClawState(MainWindow::Player *player, MainWindow::Claw
 {
     player->clawState = state;
     switch (state) {
+    case ClawStateRetracted:
+        player->clawSprite.setTextureRect(clawInAirRect);
+        player->armSprite.setTextureRect(armNormalRect);
     case ClawStateAir:
         player->clawSprite.setTextureRect(clawInAirRect);
+        player->armSprite.setTextureRect(armFlungRect);
         break;
     case ClawStateAttached:
         player->clawSprite.setTextureRect(clawAttachedRect);
+        player->armSprite.setTextureRect(armFlungRect);
         break;
     case ClawStateDetached:
         player->clawSprite.setTextureRect(clawDetachedRect);
+        player->armSprite.setTextureRect(armFlungRect);
         break;
     }
 
@@ -474,12 +490,16 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     RuckSackImage *imageInfo = imageMap.at("img/man.png");
     player->sprite.setOrigin(imageInfo->anchor_x, imageInfo->anchor_y);
     player->sprite.setScale(fromPixels(1), fromPixels(1));
+    player->localAnchorPos.Set(fromPixels(imageInfo->anchor_x), fromPixels(imageInfo->anchor_y));
 
     RuckSackImage *armImageInfo = imageMap.at("img/arm.png");
     player->armSprite.setTexture(spritesheet);
     player->armSprite.setOrigin(armImageInfo->anchor_x, armImageInfo->anchor_y);
     player->armSprite.setScale(fromPixels(1), fromPixels(1));
-    player->armSprite.setTextureRect(imageInfoToTextureRect(armImageInfo));
+    armNormalRect = imageInfoToTextureRect(armImageInfo);
+    player->armSprite.setTextureRect(armNormalRect);
+    RuckSackImage *armFlungImageInfo = imageMap.at("img/arm-flung.png");
+    armFlungRect = imageInfoToTextureRect(armFlungImageInfo);
 
     RuckSackImage *clawOpenImageInfo = imageMap.at("img/claw.png");
     player->clawSprite.setTexture(spritesheet);
@@ -491,6 +511,7 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     clawDetachedRect = imageInfoToTextureRect(clawClosedImageInfo);
     RuckSackImage *clawAttachedImageInfo = imageMap.at("img/claw-attached.png");
     clawAttachedRect = imageInfoToTextureRect(clawAttachedImageInfo);
+    player->clawLocalAnchorPos.Set(fromPixels(clawOpenImageInfo->anchor_x), fromPixels(clawOpenImageInfo->anchor_y));
 
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;

@@ -2,9 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
-
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#include <algorithm>
 
 
 static float pixelsPerMeter = 100.0f;
@@ -307,8 +305,8 @@ int MainWindow::start()
                     // prevent the claw from going back out once it goes in
                     float currentLength = player->ropeJoint->GetMaxLength();
                     float autoDelta = currentLength - clawDist;
-                    float delta = MAX(autoDelta, clawReelInSpeed);
-                    float newMax = MAX(currentLength - delta, minClawDist);
+                    float delta = std::max(autoDelta, clawReelInSpeed);
+                    float newMax = std::max(currentLength - delta, minClawDist);
                     world->DestroyJoint(player->ropeJoint);
                     b2RopeJointDef ropeJointDef;
                     ropeJointDef.bodyA = player->body;

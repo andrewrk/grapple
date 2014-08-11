@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <iostream>
 #include <sstream>
+#include <cmath>
 
 static float pixelsPerMeter = 10.0f;
 static int windowWidth = 1920;
@@ -12,10 +13,9 @@ static float maxJumpSpeed = 40.0f;
 static int maxJumpFrames = 14;
 
 
-static float PI = 3.14159265358979f;
 
 static float toDegrees(float radians) {
-    return radians * 180 / PI;
+    return radians * 180 / M_PI;
 }
 
 static float joyAxis(int index, sf::Joystick::Axis axis) {
@@ -23,11 +23,13 @@ static float joyAxis(int index, sf::Joystick::Axis axis) {
     return (fabsf(val) < deadZoneThreshold) ? 0.0f : val;
 }
 
-static float signe(float x) {
+static float sign(float x) {
     if (x < 0) {
         return -1.0f;
-    } else {
+    } else if (x > 0) {
         return 1.0f;
+    } else {
+        return 0.0f;
     }
 }
 
@@ -46,6 +48,7 @@ MainWindow::Player::Player(int index)
     this->index = index;
     footContacts = 0;
     jumpFrameCount = 0;
+    armRotateOffset = 0;
     sprite.setFrameTime(sf::seconds(0.1f));
     resetButtons();
 }
@@ -219,9 +222,17 @@ int MainWindow::start()
             }
             player->body->SetLinearVelocity(curVel);
 
-            sf::Vector2f scale = player->sprite.getScale();
-            scale.x = fabsf(scale.x) * signe(player->xAxis);
-            player->sprite.setScale(scale);
+            float scaleSign = sign(player->xAxis);
+            if (scaleSign != 0) {
+                sf::Vector2f bodyScale = player->sprite.getScale();
+                bodyScale.x = fabsf(bodyScale.x) * scaleSign;
+                player->sprite.setScale(bodyScale);
+
+                sf::Vector2f armScale = player->armSprite.getScale();
+                armScale.x = fabsf(armScale.x) * scaleSign;
+                player->armRotateOffset = (scaleSign == -1.0f) ? M_PI : 0;
+                player->armSprite.setScale(armScale);
+            }
 
             Animation *currentAnim = NULL;
             bool loop = true;
@@ -240,6 +251,10 @@ int MainWindow::start()
                 player->sprite.setAnimation(*currentAnim);
                 player->sprite.play();
             }
+            player->armSprite.setPosition(pos.x, pos.y);
+            if (player->xAxis != 0 || player->yAxis != 0)
+                player->armSprite.setRotation(toDegrees(player->armRotateOffset + atan2(player->yAxis, player->xAxis)));
+
             if (i == 0) {
                 std::stringstream ss;
                 ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts << " loop: " << loop;
@@ -255,6 +270,7 @@ int MainWindow::start()
             Player *player = players[i];
             player->sprite.update(frameTime);
             window.draw(player->sprite);
+            window.draw(player->armSprite);
         }
         window.draw(physDebugText);
 
@@ -379,8 +395,15 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     Player *player = players[index];
     RuckSackImage *imageInfo = imageMap.at("img/man.png");
     player->sprite.setOrigin(imageInfo->anchor_x, imageInfo->anchor_y);
-    player->sprite.setPosition(pos.x, pos.y);
     player->sprite.setScale(fromPixels(1), fromPixels(1));
+
+    RuckSackImage *armImageInfo = imageMap.at("img/arm.png");
+    player->armSprite.setTexture(spritesheet);
+    player->armSprite.setOrigin(armImageInfo->anchor_x, armImageInfo->anchor_y);
+    player->armSprite.setScale(fromPixels(1), fromPixels(1));
+    player->armSprite.setTextureRect(imageInfoToTextureRect(armImageInfo));
+
+
 
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;

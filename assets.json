@@ -23,10 +23,31 @@
       globImages: [
         {
           path: "assets/img/",
-          glob: "*",
+          glob: "walk-*.png",
+          prefix: "img/",
+        },
+        {
+          path: "assets/img/",
+          glob: "jump-*.png",
           prefix: "img/",
         },
       ],
+
+      images: {
+        "img/graybox.png": {
+          path: "assets/img/graybox.png",
+        },
+        "img/man.png": {
+          path: "assets/img/man.png",
+        },
+        "img/arm.png": {
+          path: "assets/img/arm.png",
+          anchor: {
+            x: 4,
+            y: 12,
+          },
+        },
+      },
     }
   }
 }

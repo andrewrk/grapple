@@ -31,9 +31,11 @@ private:
         bool btnPrimary;
         bool btnAlt;
         AnimatedSprite sprite;
+        sf::Sprite armSprite;
         b2Body *body;
         int footContacts;
         int jumpFrameCount;
+        float armRotateOffset;
 
         Player(int index);
         void resetButtons();

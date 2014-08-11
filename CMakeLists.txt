@@ -26,7 +26,7 @@ else(TMXPARSER_FOUND)
   set(STATUS_TMXPARSER "not found")
 endif(TMXPARSER_FOUND)
 
-find_package(rucksack)
+find_package(RuckSack)
 if(RUCKSACK_FOUND)
   set(STATUS_RUCKSACK "OK")
 else(RUCKSACK_FOUND)

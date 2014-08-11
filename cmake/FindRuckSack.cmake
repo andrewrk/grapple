@@ -7,15 +7,9 @@
 # RUCKSACK_FOUND
 # RUCKSACK_EXECUTABLE
 
-find_path(RUCKSACK_INCLUDE_DIR NAMES rucksack.h
-          DOC "The rucksack include directory"
-)
-
-find_library(RUCKSACK_LIBRARY NAMES rucksack
-          DOC "The rucksack library"
-)
-
-find_program(RUCKSACK_EXECUTABLE NAMES rucksack DOC "rucksack executable")
+find_path(RUCKSACK_INCLUDE_DIR NAMES rucksack.h)
+find_library(RUCKSACK_LIBRARY NAMES rucksack)
+find_program(RUCKSACK_EXECUTABLE NAMES rucksack)
 
 if(RUCKSACK_LIBRARY AND RUCKSACK_EXECUTABLE AND RUCKSACK_INCLUDE_DIR)
   set(RUCKSACK_FOUND TRUE)

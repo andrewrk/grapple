@@ -12,12 +12,12 @@ else(SFML_FOUND)
   set(STATUS_SFML "not found")
 endif(SFML_FOUND)
 
-find_package(Box2D)
-if(BOX2D_FOUND)
-  set(STATUS_BOX2D "OK")
-else(BOX2D_FOUND)
-  set(STATUS_BOX2D "not found")
-endif(BOX2D_FOUND)
+find_package(Chipmunk)
+if(CHIPMUNK_FOUND)
+  set(STATUS_CHIPMUNK "OK")
+else(CHIPMUNK_FOUND)
+  set(STATUS_CHIPMUNK "not found")
+endif(CHIPMUNK_FOUND)
 
 find_package(tmxparser)
 if(TMXPARSER_FOUND)
@@ -38,13 +38,13 @@ set_target_properties(grapple PROPERTIES
   COMPILE_FLAGS "-std=c++11 -pedantic -Werror -Wall -g")
 target_link_libraries(grapple
   ${SFML_LIBRARIES}
-  ${BOX2D_LIBRARY}
+  ${CHIPMUNK_LIBRARY}
   ${TMXPARSER_LIBRARY}
   ${RUCKSACK_LIBRARY}
   )
 include_directories(
   ${SFML_INCLUDE_DIR}
-  ${BOX2D_INCLUDE_DIR}
+  ${CHIPMUNK_INCLUDE_DIR}
   ${TMXPARSER_INCLUDE_DIR}
   ${RUCKSACK_INCLUDE_DIR}
   )
@@ -61,10 +61,10 @@ add_custom_command(OUTPUT ${SYMBOLIC_ASSETS_BUNDLE}
 add_custom_target(assets DEPENDS ${SYMBOLIC_ASSETS_BUNDLE})
 
 message(
-"System Dependencies\n"
+"Dependencies\n"
 "-------------------\n"
 "* SFML                         : ${STATUS_SFML}\n"
-"* Box2D                        : ${STATUS_BOX2D}\n"
+"* Chipmunk                     : ${STATUS_CHIPMUNK}\n"
 "* tmxparser                    : ${STATUS_TMXPARSER}\n"
 "* rucksack                     : ${STATUS_RUCKSACK}\n"
 )

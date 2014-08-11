@@ -32,6 +32,10 @@ private:
         bool btnAlt;
         AnimatedSprite sprite;
         sf::Sprite armSprite;
+        sf::Sprite clawSprite;
+        bool clawOpen;
+        b2Body *clawBody;
+
         b2Body *body;
         int footContacts;
         int jumpFrameCount;
@@ -75,6 +79,11 @@ private:
     Animation jumpingAnim;
     Animation stillAnim;
 
+
+    sf::IntRect clawOpenRect;
+    sf::IntRect clawClosedRect;
+    float clawRadius;
+    float armLength;
 
     static float fromPixels(float pixels);
     static float toPixels(float meters);

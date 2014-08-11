@@ -3,15 +3,15 @@
 #include <sstream>
 #include <cmath>
 
-static float pixelsPerMeter = 10.0f;
+static float pixelsPerMeter = 100.0f;
 static int windowWidth = 1920;
 static int windowHeight = 1080;
 
 static float deadZoneThreshold = 0.20f;
-static float maxPlayerSpeed = 20.0f;
-static float maxJumpSpeed = 40.0f;
+static float maxPlayerSpeed = 2.0f;
+static float maxJumpSpeed = 4.0f;
 static int maxJumpFrames = 14;
-
+static float clawShootSpeed = 20.0f;
 
 
 static float toDegrees(float radians) {
@@ -49,6 +49,8 @@ MainWindow::Player::Player(int index)
     footContacts = 0;
     jumpFrameCount = 0;
     armRotateOffset = 0;
+    clawOpen = false;
+    clawBody = NULL;
     sprite.setFrameTime(sf::seconds(0.1f));
     resetButtons();
 }
@@ -132,16 +134,17 @@ int MainWindow::start()
 
     arenaWidth = fromPixels(windowWidth);
     arenaHeight = fromPixels(windowHeight);
+    armLength = fromPixels(50.0f);
 
-
+    int textHeight = 20;
     physDebugText.setFont(font);
     physDebugText.setString("physics debug");
-    physDebugText.setCharacterSize(20);
+    physDebugText.setCharacterSize(textHeight);
     physDebugText.setColor(sf::Color(0, 0, 0, 255));
     physDebugText.setScale(fromPixels(1), fromPixels(1));
-    physDebugText.setPosition(0, arenaHeight - fromPixels(20));
+    physDebugText.setPosition(0, arenaHeight - fromPixels(textHeight));
 
-    world = new b2World(b2Vec2(0, 100));
+    world = new b2World(b2Vec2(0, 10));
     GlobalContactListener *listener = new GlobalContactListener(this);
     world->SetContactListener(listener);
     players.push_back(new Player(0));
@@ -204,7 +207,7 @@ int MainWindow::start()
                 player->xAxis = joyAxis(i, sf::Joystick::X);
                 player->yAxis = joyAxis(i, sf::Joystick::Y);
                 player->btnPrimary = sf::Joystick::isButtonPressed(i, 0);
-                player->btnAlt = sf::Joystick::isButtonPressed(i, 1);
+                player->btnAlt = sf::Joystick::isButtonPressed(i, 2);
             }
             b2Vec2 curVel = player->body->GetLinearVelocity();
 
@@ -234,6 +237,38 @@ int MainWindow::start()
                 player->armSprite.setScale(armScale);
             }
 
+            if (player->btnAlt && !player->clawBody) {
+
+                b2Vec2 unit(player->xAxis, player->yAxis);
+                unit.Normalize();
+
+                b2BodyDef bodyDef;
+                bodyDef.type = b2_dynamicBody;
+                bodyDef.position.Set(pos.x + unit.x * armLength, pos.y + unit.y * armLength);
+                bodyDef.angle = atan2(player->yAxis, player->xAxis);
+                bodyDef.linearVelocity.Set(curVel.x + unit.x * clawShootSpeed, curVel.y + unit.y * clawShootSpeed);
+                bodyDef.bullet = true;
+                player->clawBody = world->CreateBody(&bodyDef);
+                player->clawBody->SetFixedRotation(true);
+                b2CircleShape shape;
+                shape.m_radius = clawRadius;
+                b2FixtureDef fixtureDef;
+                fixtureDef.shape = &shape;
+                fixtureDef.density = 2.0f;
+                fixtureDef.friction = 0.0f;
+                fixtureDef.restitution = 0.0f;
+                player->clawBody->CreateFixture(&fixtureDef);
+
+                player->clawOpen = true;
+                player->clawSprite.setTextureRect(clawOpenRect);
+            }
+
+            if (i == 0) {
+                std::stringstream ss;
+                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts;
+                physDebugText.setString(ss.str());
+            }
+
             Animation *currentAnim = NULL;
             bool loop = true;
             if (player->footContacts > 0) {
@@ -255,11 +290,6 @@ int MainWindow::start()
             if (player->xAxis != 0 || player->yAxis != 0)
                 player->armSprite.setRotation(toDegrees(player->armRotateOffset + atan2(player->yAxis, player->xAxis)));
 
-            if (i == 0) {
-                std::stringstream ss;
-                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts << " loop: " << loop;
-                physDebugText.setString(ss.str());
-            }
         }
 
         for (int i = 0; i < (int)platforms.size(); i += 1) {
@@ -271,6 +301,12 @@ int MainWindow::start()
             player->sprite.update(frameTime);
             window.draw(player->sprite);
             window.draw(player->armSprite);
+            if (player->clawBody) {
+                b2Vec2 clawPos = player->clawBody->GetPosition();
+                player->clawSprite.setPosition(clawPos.x, clawPos.y);
+                player->clawSprite.setRotation(toDegrees(player->clawBody->GetAngle()));
+                window.draw(player->clawSprite);
+            }
         }
         window.draw(physDebugText);
 
@@ -403,7 +439,14 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     player->armSprite.setScale(fromPixels(1), fromPixels(1));
     player->armSprite.setTextureRect(imageInfoToTextureRect(armImageInfo));
 
-
+    RuckSackImage *clawOpenImageInfo = imageMap.at("img/claw.png");
+    player->clawSprite.setTexture(spritesheet);
+    player->clawSprite.setOrigin(clawOpenImageInfo->anchor_x, clawOpenImageInfo->anchor_y);
+    player->clawSprite.setScale(fromPixels(1), fromPixels(1));
+    clawOpenRect = imageInfoToTextureRect(clawOpenImageInfo);
+    clawRadius = fromPixels(clawOpenImageInfo->width) / 2.0f;
+    RuckSackImage *clawClosedImageInfo = imageMap.at("img/claw-retracted.png");
+    clawClosedRect = imageInfoToTextureRect(clawClosedImageInfo);
 
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;
@@ -418,7 +461,7 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     fixtureDef.friction = 0.0f;
     player->body->CreateFixture(&fixtureDef);
 
-    shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f - 0.01f, 0.3f, b2Vec2(0, fromPixels(imageInfo->height) / 2.0f), 0.0f);
+    shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f - 0.001f, 0.3f, b2Vec2(0, fromPixels(imageInfo->height) / 2.0f), 0.0f);
     fixtureDef.isSensor = true;
     b2Fixture *sensor = player->body->CreateFixture(&fixtureDef);
     sensor->SetUserData(player);

@@ -23,6 +23,18 @@ public:
 private:
 
 
+    enum FixtureIdentType {
+        FootSensorFixture,
+        ClawFixture,
+    };
+
+    class Player;
+    struct FixtureIdent {
+        FixtureIdentType type;
+        MainWindow *window;
+        Player *player;
+    };
+
     class Player {
     public:
         int index;
@@ -35,13 +47,15 @@ private:
         sf::Sprite clawSprite;
         bool clawOpen;
         b2Body *clawBody;
+        FixtureIdent clawFixtureUserData;
+        FixtureIdent footSensorUserData;
 
         b2Body *body;
         int footContacts;
         int jumpFrameCount;
         float armRotateOffset;
 
-        Player(int index);
+        Player(int index, MainWindow *window);
         void resetButtons();
     };
 
@@ -58,6 +72,8 @@ private:
         MainWindow *window;
         GlobalContactListener(MainWindow *window) : window(window){}
     };
+
+
 
     // in meters
     float arenaWidth;
@@ -98,6 +114,8 @@ private:
     sf::IntRect imageInfoToTextureRect(RuckSackImage *imageInfo);
 
     void loadAnimation(Animation &animation, const std::vector<std::string> &list);
+
+    void handleClawHit(Player *player, b2Contact *contact, b2Fixture *clawFixture);
 
     friend class GlobalContactListener;
 };

@@ -43,15 +43,24 @@ MainWindow::~MainWindow()
     delete map;
 }
 
-MainWindow::Player::Player(int index)
+MainWindow::Player::Player(int i, MainWindow *window)
 {
-    this->index = index;
+    index = i;
     footContacts = 0;
     jumpFrameCount = 0;
     armRotateOffset = 0;
     clawOpen = false;
     clawBody = NULL;
     sprite.setFrameTime(sf::seconds(0.1f));
+
+    clawFixtureUserData.window = window;
+    clawFixtureUserData.type = ClawFixture;
+    clawFixtureUserData.player = this;
+
+    footSensorUserData.window = window;
+    footSensorUserData.type = FootSensorFixture;
+    footSensorUserData.player = this;
+
     resetButtons();
 }
 
@@ -147,10 +156,10 @@ int MainWindow::start()
     world = new b2World(b2Vec2(0, 10));
     GlobalContactListener *listener = new GlobalContactListener(this);
     world->SetContactListener(listener);
-    players.push_back(new Player(0));
-    players.push_back(new Player(1));
-    players.push_back(new Player(2));
-    players.push_back(new Player(3));
+    players.push_back(new Player(0, this));
+    players.push_back(new Player(1, this));
+    players.push_back(new Player(2, this));
+    players.push_back(new Player(3, this));
 
     loadMap();
 
@@ -254,9 +263,10 @@ int MainWindow::start()
                 shape.m_radius = clawRadius;
                 b2FixtureDef fixtureDef;
                 fixtureDef.shape = &shape;
-                fixtureDef.density = 2.0f;
+                fixtureDef.density = 4.0f;
                 fixtureDef.friction = 0.0f;
                 fixtureDef.restitution = 0.0f;
+                fixtureDef.userData = &player->clawFixtureUserData;
                 player->clawBody->CreateFixture(&fixtureDef);
 
                 player->clawOpen = true;
@@ -399,6 +409,13 @@ void MainWindow::loadAnimation(Animation &animation, const std::vector<std::stri
     }
 }
 
+void MainWindow::handleClawHit(MainWindow::Player *player, b2Contact *contact, b2Fixture *clawFixture)
+{
+    // note we're not allowed to alter the physics world in this callback function.
+
+    std::cout << "claw hit something\n";
+}
+
 void MainWindow::addPlatform(b2Vec2 pos, b2Vec2 size, std::string imgName)
 {
     Platform *platform = new Platform();
@@ -463,35 +480,69 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
 
     shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f - 0.001f, 0.3f, b2Vec2(0, fromPixels(imageInfo->height) / 2.0f), 0.0f);
     fixtureDef.isSensor = true;
-    b2Fixture *sensor = player->body->CreateFixture(&fixtureDef);
-    sensor->SetUserData(player);
+    fixtureDef.userData = &player->footSensorUserData;
+    player->body->CreateFixture(&fixtureDef);
 }
 
 
 void MainWindow::GlobalContactListener::BeginContact(b2Contact *contact)
 {
-    Player *player;
+    FixtureIdent *fixtureIdent;
 
-    player = (Player*) contact->GetFixtureA()->GetUserData();
-    if (player)
-        player->footContacts += 1;
+    b2Fixture *fixtureA = contact->GetFixtureA();
+    fixtureIdent = (FixtureIdent*) fixtureA->GetUserData();
+    if (fixtureIdent) {
+        switch (fixtureIdent->type) {
+        case FootSensorFixture:
+            fixtureIdent->player->footContacts += 1;
+            break;
+        case ClawFixture:
+            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureA);
+            break;
+        }
+    }
 
-
-    player = (Player*) contact->GetFixtureB()->GetUserData();
-    if (player)
-        player->footContacts += 1;
+    b2Fixture *fixtureB = contact->GetFixtureB();
+    fixtureIdent = (FixtureIdent*) fixtureB->GetUserData();
+    if (fixtureIdent) {
+        switch (fixtureIdent->type) {
+        case FootSensorFixture:
+            fixtureIdent->player->footContacts += 1;
+            break;
+        case ClawFixture:
+            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureB);
+            break;
+        }
+    }
 }
 
 void MainWindow::GlobalContactListener::EndContact(b2Contact *contact)
 {
-    Player *player;
+    FixtureIdent *fixtureIdent;
 
-    player = (Player*) contact->GetFixtureA()->GetUserData();
-    if (player)
-        player->footContacts -= 1;
+    b2Fixture *fixtureA = contact->GetFixtureA();
+    fixtureIdent = (FixtureIdent*) fixtureA->GetUserData();
+    if (fixtureIdent) {
+        switch (fixtureIdent->type) {
+        case FootSensorFixture:
+            fixtureIdent->player->footContacts -= 1;
+            break;
+        case ClawFixture:
+            // nothing to do here
+            break;
+        }
+    }
 
-
-    player = (Player*) contact->GetFixtureB()->GetUserData();
-    if (player)
-        player->footContacts -= 1;
+    b2Fixture *fixtureB = contact->GetFixtureB();
+    fixtureIdent = (FixtureIdent*) fixtureB->GetUserData();
+    if (fixtureIdent) {
+        switch (fixtureIdent->type) {
+        case FootSensorFixture:
+            fixtureIdent->player->footContacts -= 1;
+            break;
+        case ClawFixture:
+            // nothing to do here
+            break;
+        }
+    }
 }

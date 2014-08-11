@@ -5,6 +5,11 @@
       glob: "*",
       prefix: "text/",
     },
+    {
+      path: "assets/font",
+      glob: "*",
+      prefix: "font/",
+    },
   ],
   textures: {
     spritesheet: {

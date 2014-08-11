@@ -27,6 +27,8 @@ private:
         float yAxis;
         bool btnPrimary;
         bool btnAlt;
+        sf::Sprite sprite;
+        b2Body *body;
 
         Player(int index);
         void resetButtons();
@@ -35,9 +37,7 @@ private:
     class Platform {
     public:
         sf::Sprite sprite;
-        b2BodyDef *bodyDef;
         b2Body *body;
-        b2PolygonShape shape;
     };
 
     // in meters
@@ -52,6 +52,8 @@ private:
     std::map<std::string, RuckSackImage *> imageMap;
 
     Tmx::Map *map = NULL;
+    sf::Font font;
+    sf::Text physDebugText;
 
 
     sf::Texture spritesheet;
@@ -65,6 +67,8 @@ private:
 
     void addPlatform(b2Vec2 pos, b2Vec2 size, std::string img);
     void initPlayer(int index, b2Vec2 pos);
+
+    sf::IntRect imageInfoToTextureRect(RuckSackImage *imageInfo);
 
 };
 

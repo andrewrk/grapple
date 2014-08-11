@@ -49,7 +49,7 @@ MainWindow::Player::Player(int i, MainWindow *window)
     footContacts = 0;
     jumpFrameCount = 0;
     armRotateOffset = 0;
-    clawOpen = false;
+    clawState = ClawStateAir;
     clawBody = NULL;
     sprite.setFrameTime(sf::seconds(0.1f));
 
@@ -270,8 +270,7 @@ int MainWindow::start()
                 fixtureDef.userData = &player->clawFixtureUserData;
                 player->clawBody->CreateFixture(&fixtureDef);
 
-                player->clawOpen = true;
-                player->clawSprite.setTextureRect(clawOpenRect);
+                setPlayerClawState(player, ClawStateAir);
             }
 
             if (i == 0) {
@@ -425,6 +424,23 @@ void MainWindow::handleClawHit(MainWindow::Player *player, b2Contact *contact, b
     std::cout << "claw hit something\n";
 }
 
+void MainWindow::setPlayerClawState(MainWindow::Player *player, MainWindow::ClawState state)
+{
+    player->clawState = state;
+    switch (state) {
+    case ClawStateAir:
+        player->clawSprite.setTextureRect(clawInAirRect);
+        break;
+    case ClawStateAttached:
+        player->clawSprite.setTextureRect(clawAttachedRect);
+        break;
+    case ClawStateDetached:
+        player->clawSprite.setTextureRect(clawDetachedRect);
+        break;
+    }
+
+}
+
 void MainWindow::addPlatform(b2Vec2 pos, b2Vec2 size, std::string imgName)
 {
     Platform *platform = new Platform();
@@ -469,10 +485,12 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     player->clawSprite.setTexture(spritesheet);
     player->clawSprite.setOrigin(clawOpenImageInfo->anchor_x, clawOpenImageInfo->anchor_y);
     player->clawSprite.setScale(fromPixels(1), fromPixels(1));
-    clawOpenRect = imageInfoToTextureRect(clawOpenImageInfo);
+    clawInAirRect = imageInfoToTextureRect(clawOpenImageInfo);
     clawRadius = fromPixels(clawOpenImageInfo->width) / 2.0f;
     RuckSackImage *clawClosedImageInfo = imageMap.at("img/claw-retracted.png");
-    clawClosedRect = imageInfoToTextureRect(clawClosedImageInfo);
+    clawDetachedRect = imageInfoToTextureRect(clawClosedImageInfo);
+    RuckSackImage *clawAttachedImageInfo = imageMap.at("img/claw-attached.png");
+    clawAttachedRect = imageInfoToTextureRect(clawAttachedImageInfo);
 
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;

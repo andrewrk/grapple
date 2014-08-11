@@ -53,6 +53,9 @@
         "img/claw-retracted.png": {
           path: "assets/img/claw-retracted.png",
         },
+        "img/claw-attached.png": {
+          path: "assets/img/claw-attached.png",
+        },
       },
     }
   }

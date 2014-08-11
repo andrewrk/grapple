@@ -35,6 +35,12 @@ private:
         Player *player;
     };
 
+    enum ClawState {
+        ClawStateAir,
+        ClawStateAttached,
+        ClawStateDetached,
+    };
+
     class Player {
     public:
         int index;
@@ -45,7 +51,7 @@ private:
         AnimatedSprite sprite;
         sf::Sprite armSprite;
         sf::Sprite clawSprite;
-        bool clawOpen;
+        ClawState clawState;
         b2Body *clawBody;
         FixtureIdent clawFixtureUserData;
         FixtureIdent footSensorUserData;
@@ -97,8 +103,9 @@ private:
     Animation stillAnim;
 
 
-    sf::IntRect clawOpenRect;
-    sf::IntRect clawClosedRect;
+    sf::IntRect clawInAirRect;
+    sf::IntRect clawDetachedRect;
+    sf::IntRect clawAttachedRect;
     float clawRadius;
     float armLength;
 
@@ -119,6 +126,7 @@ private:
     void loadAnimation(Animation &animation, const std::vector<std::string> &list);
 
     void handleClawHit(Player *player, b2Contact *contact, b2Fixture *clawFixture);
+    void setPlayerClawState(Player *player, ClawState state);
 
     friend class GlobalContactListener;
 };

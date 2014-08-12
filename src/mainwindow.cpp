@@ -20,6 +20,7 @@ static float retractClawDist = 150.0f;
 static float clawReelInSpeedAttached = 12.0f;
 static float clawReelInSpeedDetached = 20.0f;
 static float jnAccMin = -3000.0f;
+static float maxReelOutLength = 99999999.0f;
 
 
 static float toDegrees(float radians) {
@@ -66,6 +67,7 @@ void MainWindow::Player::resetButtons()
     btnJump = false;
     btnFireGrapple = false;
     btnUnhookGrapple = false;
+    btnReelOut = false;
 }
 
 void MainWindow::groundQueryCallback(cpShape *shape, void *data) {
@@ -225,6 +227,7 @@ int MainWindow::start()
                 player->btnJump = sf::Joystick::isButtonPressed(i, 0);
                 player->btnFireGrapple = sf::Joystick::isButtonPressed(i, 2);
                 player->btnUnhookGrapple = sf::Joystick::isButtonPressed(i, 1);
+                player->btnReelOut = sf::Joystick::isButtonPressed(i, 3);
             }
 
             // find out if grounded
@@ -294,7 +297,7 @@ int MainWindow::start()
 
                 player->slideJoint = cpSlideJointAlloc();
                 cpSlideJointInit(player->slideJoint, player->body, player->clawBody,
-                                 player->localAnchorPos, player->clawLocalAnchorPos, minClawDist, 99999999.0f);
+                                 player->localAnchorPos, player->clawLocalAnchorPos, minClawDist, maxReelOutLength);
                 cpSpaceAddConstraint(space, &player->slideJoint->constraint);
                 setPlayerClawState(player, ClawStateAir);
             } else if (player->btnFireGrapple && player->clawState == ClawStateAttached) {
@@ -305,6 +308,8 @@ int MainWindow::start()
                 playerReelClawOneFrame(player, true);
             } else if (player->btnUnhookGrapple && player->clawState == ClawStateAttached) {
                 playerUnhookClaw(player);
+            } else if (player->btnReelOut && player->clawState == ClawStateAttached) {
+                playerReelOutClawOneFrame(player);
             }
 
             if (player->clawState != ClawStateRetracted) {
@@ -461,6 +466,7 @@ void MainWindow::setPlayerClawState(MainWindow::Player *player, MainWindow::Claw
     case ClawStateRetracted:
         player->clawSprite.setTextureRect(clawInAirRect);
         player->armSprite.setTextureRect(armNormalRect);
+        break;
     case ClawStateAir:
         player->clawSprite.setTextureRect(clawInAirRect);
         player->armSprite.setTextureRect(armFlungRect);
@@ -577,6 +583,13 @@ void MainWindow::playerReelClawOneFrame(MainWindow::Player *player, bool retract
         cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
 
     }
+}
+
+void MainWindow::playerReelOutClawOneFrame(MainWindow::Player *player)
+{
+    float currentLength = cpSlideJointGetMax(&player->slideJoint->constraint);
+    float newMax = std::min(currentLength + getPlayerReelInSpeed(player), maxReelOutLength);
+    cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
 }
 
 float MainWindow::getPlayerReelInSpeed(MainWindow::Player *player)

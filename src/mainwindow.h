@@ -49,6 +49,7 @@ private:
         bool btnJump;
         bool btnFireGrapple;
         bool btnUnhookGrapple;
+        bool btnReelOut;
 
         AnimatedSprite sprite;
         sf::Sprite armSprite;
@@ -135,6 +136,7 @@ private:
     void playerRetractClaw(Player *player);
     void playerUnhookClaw(Player *player);
     void playerReelClawOneFrame(Player *player, bool retract);
+    void playerReelOutClawOneFrame(Player *player);
     float getPlayerReelInSpeed(Player *player);
 
     static void groundQueryCallback(cpShape *shape, void *data);

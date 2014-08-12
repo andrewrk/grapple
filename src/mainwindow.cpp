@@ -14,12 +14,12 @@ static float playerMoveForceAir = 300.0f;
 static float playerMoveForceGround = 600.0f;
 static float jumpForce = 800.0f;
 static int maxJumpFrames = 14;
-static float clawShootSpeed = 2000.0f;
+static float clawShootSpeed = 2500.0f;
 static float minClawDist = 50.0f;
-static float retractClawDist = 100.0f;
-static float clawReelInSpeed = 5.0f;
-//static float easeTensionSlack = 5.0f;
-//static float jnAccMin = -1200.0f;
+static float retractClawDist = 150.0f;
+static float clawReelInSpeedAttached = 12.0f;
+static float clawReelInSpeedDetached = 20.0f;
+static float jnAccMin = -3000.0f;
 
 
 static float toDegrees(float radians) {
@@ -151,8 +151,7 @@ int MainWindow::start()
     arenaWidth = windowWidth;
     arenaHeight = windowHeight;
     armLength = 50.0f;
-    normalRopeColor = sf::Color(255, 255, 0);
-    retractClawColor = sf::Color(0, 0, 255);
+    ropeColor = sf::Color(255, 255, 0);
 
 
     physDebugText.setFont(font);
@@ -204,6 +203,7 @@ int MainWindow::start()
             if (player->queuePivotJoint) {
                 player->queuePivotJoint = false;
                 cpSpaceAddConstraint(space, &player->pivotJoint->constraint);
+                setPlayerClawState(player, ClawStateAttached);
             }
         }
 
@@ -282,7 +282,7 @@ int MainWindow::start()
             player->aimStartPos = cpvadd(pos, cpvmult(player->aimUnit, armLength));
 
             if (player->btnFireGrapple && player->clawState == ClawStateRetracted) {
-                player->clawBody = cpSpaceAddBody(space, cpBodyNew(5.0f, INFINITY));
+                player->clawBody = cpSpaceAddBody(space, cpBodyNew(1.0f, INFINITY));
                 cpBodySetPos(player->clawBody, player->aimStartPos);
                 cpBodySetAngle(player->clawBody, player->pointAngle);
                 cpBodySetVel(player->clawBody, cpvadd(curVel, cpvmult(player->aimUnit, clawShootSpeed)));
@@ -297,36 +297,26 @@ int MainWindow::start()
                                  player->localAnchorPos, player->clawLocalAnchorPos, minClawDist, 99999999.0f);
                 cpSpaceAddConstraint(space, &player->slideJoint->constraint);
                 setPlayerClawState(player, ClawStateAir);
-            } else if (player->btnFireGrapple && (player->clawState == ClawStateDetached || player->clawState == ClawStateAttached)) {
-                cpVect clawPos = player->clawBody->p;
-                float clawDist = cpvlength(cpvsub(clawPos, pos));
-                if (clawDist <= retractClawDist) {
-                    player->wantToRetractClaw = true;
-                } else {
-                    // prevent the claw from going back out once it goes in
-                    float currentLength = cpSlideJointGetMax(&player->slideJoint->constraint);
-                    float autoDelta = currentLength - clawDist;
-                    float delta = std::max(autoDelta, clawReelInSpeed);
-                    float newMax = std::max(currentLength - delta, minClawDist);
-                    cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
-
-                }
-            } else if (!player->btnFireGrapple && player->wantToRetractClaw) {
-                playerRetractClaw(player);
+            } else if (player->btnFireGrapple && player->clawState == ClawStateAttached) {
+                playerReelClawOneFrame(player, false);
+            } else if (player->btnFireGrapple && player->clawState == ClawStateDetached) {
+                playerReelClawOneFrame(player, true);
+            } else if (player->btnUnhookGrapple && player->clawState == ClawStateDetached) {
+                playerReelClawOneFrame(player, true);
             } else if (player->btnUnhookGrapple && player->clawState == ClawStateAttached) {
                 playerUnhookClaw(player);
             }
-/*
+
             if (player->clawState != ClawStateRetracted) {
                 if (player->slideJoint->jnAcc < jnAccMin) {
                     // too tense. give it some slack.
                     float currentLength = cpSlideJointGetMax(&player->slideJoint->constraint);
-                    float newMax = currentLength + easeTensionSlack;
+                    float newMax = currentLength + getPlayerReelInSpeed(player);
                     cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
                     player->slideJoint->jnAcc = jnAccMin;
                 }
             }
-            */
+
 
             if (i == 0 && player->slideJoint) {
                 std::stringstream ss;
@@ -374,7 +364,6 @@ int MainWindow::start()
                 player->clawSprite.setRotation(toDegrees(player->clawBody->a));
                 window.draw(player->clawSprite);
 
-                sf::Color ropeColor = player->wantToRetractClaw ? retractClawColor : normalRopeColor;
                 sf::Vertex line[] =
                 {
                     sf::Vertex(sf::Vector2f(player->aimStartPos.x, player->aimStartPos.y), ropeColor),
@@ -519,10 +508,8 @@ void MainWindow::onPostSolveCollision(cpArbiter *arb)
 
 void MainWindow::handleClawHit(MainWindow::Player *player, cpArbiter *arb, cpShape *otherShape)
 {
-    if (player->clawState != ClawStateAir)
+    if (player->clawState != ClawStateAir || player->queuePivotJoint)
         return;
-
-    setPlayerClawState(player, ClawStateAttached);
 
     cpContactPointSet pointSet = cpArbiterGetContactPointSet(arb);
 
@@ -549,7 +536,6 @@ void MainWindow::playerRetractClaw(MainWindow::Player *player)
         playerUnhookClaw(player);
 
     setPlayerClawState(player, ClawStateRetracted);
-    player->wantToRetractClaw = false;
 
     cpSpaceRemoveConstraint(space, &player->slideJoint->constraint);
     cpConstraintDestroy(&player->slideJoint->constraint);
@@ -573,6 +559,29 @@ void MainWindow::playerUnhookClaw(MainWindow::Player *player)
     cpSpaceRemoveConstraint(space, &player->pivotJoint->constraint);
     cpConstraintDestroy(&player->pivotJoint->constraint);
     player->pivotJoint = NULL;
+}
+
+void MainWindow::playerReelClawOneFrame(MainWindow::Player *player, bool retract)
+{
+    cpVect clawPos = player->clawBody->p;
+    float clawDist = cpvlength(cpvsub(clawPos, cpBodyGetPos(player->body)));
+    if (clawDist <= retractClawDist) {
+        if (retract)
+            playerRetractClaw(player);
+    } else {
+        // prevent the claw from going back out once it goes in
+        float currentLength = cpSlideJointGetMax(&player->slideJoint->constraint);
+        float autoDelta = currentLength - std::max(clawDist, retractClawDist);
+        float delta = std::max(autoDelta, getPlayerReelInSpeed(player));
+        float newMax = std::max(currentLength - delta, minClawDist);
+        cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
+
+    }
+}
+
+float MainWindow::getPlayerReelInSpeed(MainWindow::Player *player)
+{
+    return (player->clawState == ClawStateAttached) ? clawReelInSpeedAttached : clawReelInSpeedDetached;
 }
 
 void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName)

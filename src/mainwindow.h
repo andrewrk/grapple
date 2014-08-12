@@ -65,7 +65,6 @@ private:
         cpSlideJoint *slideJoint = NULL;
         cpPivotJoint *pivotJoint = NULL;
         bool queuePivotJoint = false;
-        bool wantToRetractClaw = false;
 
         cpBody *body = NULL;
         cpShape *shape = NULL;
@@ -116,8 +115,7 @@ private:
 
 
 
-    sf::Color normalRopeColor;
-    sf::Color retractClawColor;
+    sf::Color ropeColor;
 
     void loadMap();
 
@@ -136,6 +134,8 @@ private:
     void handleClawHit(Player *player, cpArbiter *arb, cpShape *otherShape);
     void playerRetractClaw(Player *player);
     void playerUnhookClaw(Player *player);
+    void playerReelClawOneFrame(Player *player, bool retract);
+    float getPlayerReelInSpeed(Player *player);
 
     static void groundQueryCallback(cpShape *shape, void *data);
     static void postSolveCollisionCallback(cpArbiter *arb, cpSpace *space, void *data);

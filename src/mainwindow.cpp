@@ -4,22 +4,20 @@
 #include <cmath>
 #include <algorithm>
 
-
-static float pixelsPerMeter = 100.0f;
 static int windowWidth = 1920;
 static int windowHeight = 1080;
 
 static float deadZoneThreshold = 0.20f;
-static float maxPlayerSpeed = 2.0f;
-static float maxJumpSpeed = 4.0f;
+static float maxPlayerSpeed = 20.0;
+static float maxJumpSpeed = 40.0f;
 static int maxJumpFrames = 14;
-static float clawShootSpeed = 20.0f;
-static float minClawDist = 0.5f;
-static float clawReelInSpeed = 0.05f;
+static float clawShootSpeed = 2000.0f;
+static float minClawDist = 50.0f;
+static float clawReelInSpeed = 5.0f;
 
 
 static float toDegrees(float radians) {
-    return radians * 180 / M_PI;
+    return radians * 180.0f / M_PI;
 }
 
 static float joyAxis(int index, sf::Joystick::Axis axis) {
@@ -41,12 +39,6 @@ MainWindow::MainWindow()
 {
 }
 
-MainWindow::~MainWindow()
-{
-    delete world;
-    delete map;
-}
-
 MainWindow::Player::Player(int i, MainWindow *window)
 {
     index = i;
@@ -64,7 +56,7 @@ MainWindow::Player::Player(int i, MainWindow *window)
     playerBodyUserData.type = PlayerFixture;
     playerBodyUserData.player = this;
 
-    aimUnit.Set(1, 0);
+    aimUnit = {1, 0};
 
     resetButtons();
 }
@@ -146,9 +138,9 @@ int MainWindow::start()
     window.setVerticalSyncEnabled(true);
     float timeStep = 1.0f/60.0f;
 
-    arenaWidth = fromPixels(windowWidth);
-    arenaHeight = fromPixels(windowHeight);
-    armLength = fromPixels(50.0f);
+    arenaWidth = windowWidth;
+    arenaHeight = windowHeight;
+    armLength = 50.0f;
     ropeColor = sf::Color(255, 255, 0);
 
     int textHeight = 20;
@@ -156,13 +148,10 @@ int MainWindow::start()
     physDebugText.setString("physics debug");
     physDebugText.setCharacterSize(textHeight);
     physDebugText.setColor(sf::Color(0, 0, 0, 255));
-    physDebugText.setScale(fromPixels(1), fromPixels(1));
-    physDebugText.setPosition(0, arenaHeight - fromPixels(textHeight));
+    physDebugText.setPosition(0, arenaHeight - textHeight);
 
-    world = new b2World(b2Vec2(0, 10));
-    GlobalContactListener *listener = new GlobalContactListener(this);
-    world->SetContactListener(listener);
-    world->SetContactFilter(listener);
+    space = cpSpaceNew();
+    cpSpaceSetGravity(space, cpv(0, 1000));
     players.push_back(new Player(0, this));
     players.push_back(new Player(1, this));
     players.push_back(new Player(2, this));
@@ -170,9 +159,6 @@ int MainWindow::start()
 
     loadMap();
 
-
-    sf::View view(sf::FloatRect(0, 0, arenaWidth, arenaHeight));
-    window.setView(view);
 
     sf::Clock frameClock;
     while (window.isOpen())
@@ -189,14 +175,6 @@ int MainWindow::start()
                 case sf::Keyboard::Escape:
                     window.close();
                     break;
-                case sf::Keyboard::S:
-                    view.zoom(0.9);
-                    window.setView(view);
-                    break;
-                case sf::Keyboard::T:
-                    view.zoom(1.1);
-                    window.setView(view);
-                    break;
                 default:
                     break;
                 }
@@ -210,23 +188,21 @@ int MainWindow::start()
 
         for (int i = 0; i < (int)players.size(); i += 1) {
             Player *player = players[i];
-            if (player->queueRevoluteJoint) {
-                player->queueRevoluteJoint = false;
-                player->revoluteJoint = (b2RevoluteJoint *) world->CreateJoint(&player->revoluteJointDef);
+            if (player->queuePivoteJoint) {
+                player->queuePivoteJoint = false;
+                // TODO player->pivotJoint = (b2RevoluteJoint *) space->CreateJoint(&player->revoluteJointDef);
             }
         }
 
-
-        world->Step(timeStep, 8, 3);
-        world->ClearForces();
+        cpSpaceStep(space, timeStep);
 
         window.clear(sf::Color(158, 204, 233, 255));
 
         for (int i = 0; i < (int)players.size(); i += 1) {
             Player *player = players[i];
-            b2Vec2 pos = player->body->GetPosition();
+            cpVect pos = player->body->p;
             player->sprite.setPosition(pos.x, pos.y);
-            player->sprite.setRotation(toDegrees(player->body->GetAngle()));
+            player->sprite.setRotation(toDegrees(player->body->a));
             player->resetButtons();
             if (sf::Joystick::isConnected(i)) {
                 player->xAxis = joyAxis(i, sf::Joystick::X);
@@ -234,7 +210,7 @@ int MainWindow::start()
                 player->btnJump = sf::Joystick::isButtonPressed(i, 0);
                 player->btnFireGrapple = sf::Joystick::isButtonPressed(i, 2);
             }
-            b2Vec2 curVel = player->body->GetLinearVelocity();
+            cpVect curVel = player->body->v;
 
             curVel.x = player->xAxis * maxPlayerSpeed;
             if (player->btnJump && player->footContacts > 0) {
@@ -248,7 +224,7 @@ int MainWindow::start()
                 player->jumpFrameCount += 1;
                 curVel.y = -maxJumpSpeed;
             }
-            player->body->SetLinearVelocity(curVel);
+            cpBodySetVel(player->body, curVel);
 
             float scaleSign = sign(player->xAxis);
             if (scaleSign != 0) {
@@ -261,61 +237,37 @@ int MainWindow::start()
                 player->armRotateOffset = (scaleSign == -1.0f) ? M_PI : 0;
                 player->armSprite.setScale(armScale);
 
-                player->aimUnit.Set(player->xAxis, player->yAxis);
-                player->aimUnit.Normalize();
+                player->aimUnit = cpvnormalize(cpv(player->xAxis, player->yAxis));
             }
-            player->aimStartPos.Set(pos.x + player->aimUnit.x * armLength, pos.y + player->aimUnit.y * armLength);
-
+            player->aimStartPos = cpvadd(pos, cpvmult(player->aimUnit, armLength));
 
             if (player->btnFireGrapple && player->clawState == ClawStateRetracted) {
-                b2BodyDef bodyDef;
-                bodyDef.type = b2_dynamicBody;
-                bodyDef.position.Set(player->aimStartPos.x, player->aimStartPos.y);
-                bodyDef.angle = atan2(player->yAxis, player->xAxis);
-                bodyDef.linearVelocity.Set(curVel.x + player->aimUnit.x * clawShootSpeed, curVel.y + player->aimUnit.y * clawShootSpeed);
-                bodyDef.bullet = true;
-                player->clawBody = world->CreateBody(&bodyDef);
-                player->clawBody->SetFixedRotation(true);
-                b2CircleShape shape;
-                shape.m_radius = clawRadius;
-                b2FixtureDef fixtureDef;
-                fixtureDef.shape = &shape;
-                fixtureDef.density = 8.0f;
-                fixtureDef.friction = 0.0f;
-                fixtureDef.restitution = 0.0f;
-                fixtureDef.userData = &player->clawFixtureUserData;
-                player->clawBody->CreateFixture(&fixtureDef);
+                player->clawBody = cpSpaceAddBody(space, cpBodyNew(5.0f, INFINITY));
+                cpBodySetPos(player->clawBody, player->aimStartPos);
+                cpBodySetAngle(player->clawBody, atan2(player->yAxis, player->xAxis));
+                cpBodySetVel(player->clawBody, cpvadd(curVel, cpvmult(player->aimUnit, clawShootSpeed)));
 
-                b2RopeJointDef ropeJointDef;
-                ropeJointDef.bodyA = player->body;
-                ropeJointDef.bodyB = player->clawBody;
-                ropeJointDef.collideConnected = true;
-                ropeJointDef.localAnchorA = player->localAnchorPos;
-                ropeJointDef.localAnchorB = player->clawLocalAnchorPos;
-                ropeJointDef.maxLength = 99999999.0f; // we don't want this number to be reached
-                player->ropeJoint = (b2RopeJoint *) world->CreateJoint(&ropeJointDef);
+                player->clawShape = cpSpaceAddShape(space, cpCircleShapeNew(player->clawBody, clawRadius, cpvzero));
+                cpShapeSetFriction(player->clawShape, 0.0f);
+                cpShapeSetElasticity(player->clawShape, 0.0f);
 
+                player->slideJoint = cpSlideJointAlloc();
+                cpSlideJointInit(player->slideJoint, player->body, player->clawBody,
+                                 player->localAnchorPos, player->clawLocalAnchorPos, minClawDist, INFINITY);
+                cpSpaceAddConstraint(space, &player->slideJoint->constraint);
                 setPlayerClawState(player, ClawStateAir);
             } else if (player->btnFireGrapple && player->clawState == ClawStateAttached) {
-                b2Vec2 clawPos = player->clawBody->GetPosition();
-                float clawDist = (clawPos - pos).Length();
+                cpVect clawPos = player->clawBody->p;
+                float clawDist = cpvlength(cpvsub(clawPos, pos));
                 if (clawDist <= minClawDist) {
                     // TODO retract claw
                 } else {
                     // prevent the claw from going back out once it goes in
-                    float currentLength = player->ropeJoint->GetMaxLength();
+                    float currentLength = player->slideJoint->max;
                     float autoDelta = currentLength - clawDist;
                     float delta = std::max(autoDelta, clawReelInSpeed);
                     float newMax = std::max(currentLength - delta, minClawDist);
-                    world->DestroyJoint(player->ropeJoint);
-                    b2RopeJointDef ropeJointDef;
-                    ropeJointDef.bodyA = player->body;
-                    ropeJointDef.bodyB = player->clawBody;
-                    ropeJointDef.collideConnected = true;
-                    ropeJointDef.localAnchorA = player->localAnchorPos;
-                    ropeJointDef.localAnchorB = player->clawLocalAnchorPos;
-                    ropeJointDef.maxLength = newMax;
-                    player->ropeJoint = (b2RopeJoint *) world->CreateJoint(&ropeJointDef);
+                    cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
 
                     if (i == 0) {
                         std::stringstream ss;
@@ -358,9 +310,9 @@ int MainWindow::start()
             window.draw(player->sprite);
             window.draw(player->armSprite);
             if (player->clawState != ClawStateRetracted) {
-                b2Vec2 clawPos = player->clawBody->GetPosition();
+                cpVect clawPos = player->clawBody->p;
                 player->clawSprite.setPosition(clawPos.x, clawPos.y);
-                player->clawSprite.setRotation(toDegrees(player->clawBody->GetAngle()));
+                player->clawSprite.setRotation(toDegrees(player->clawBody->a));
                 window.draw(player->clawSprite);
 
                 sf::Vertex line[] =
@@ -380,16 +332,6 @@ int MainWindow::start()
     return 0;
 }
 
-float MainWindow::fromPixels(float pixels)
-{
-    return pixels / pixelsPerMeter;
-}
-
-float MainWindow::toPixels(float meters)
-{
-    return meters * pixelsPerMeter;
-}
-
 void MainWindow::loadMap()
 {
     map = new Tmx::Map();
@@ -402,8 +344,8 @@ void MainWindow::loadMap()
         const Tmx::ObjectGroup *objectGroup = map->GetObjectGroup(i);
         for (int j = 0; j < objectGroup->GetNumObjects(); j += 1) {
             const Tmx::Object *object = objectGroup->GetObject(j);
-            b2Vec2 size(fromPixels(object->GetWidth()), fromPixels(object->GetHeight()));
-            b2Vec2 pos(fromPixels(object->GetX()) + size.x / 2, fromPixels(object->GetY()) + size.y / 2);
+            cpVect size = cpv(object->GetWidth(), object->GetHeight());
+            cpVect pos = cpv(object->GetX() + size.x / 2, object->GetY() + size.y / 2);
             const Tmx::PropertySet &properties = object->GetProperties();
             std::string img = properties.GetLiteralProperty("img");
 
@@ -463,34 +405,6 @@ void MainWindow::loadAnimation(Animation &animation, const std::vector<std::stri
     }
 }
 
-void MainWindow::handleClawHit(MainWindow::Player *player, b2Contact *contact, b2Fixture *clawFixture, b2Fixture *otherFixture)
-{
-    // note we're not allowed to alter the physics world in this callback function.
-
-    if (player->clawState != ClawStateAir)
-        return;
-
-    // find the contact point
-    b2WorldManifold worldManifold;
-    contact->GetWorldManifold(&worldManifold);
-    b2Vec2 worldPoint = worldManifold.points[0];
-    b2Vec2 otherFixturePos = otherFixture->GetBody()->GetPosition();
-
-    setPlayerClawState(player, ClawStateAttached);
-    player->revoluteJointDef.bodyA = clawFixture->GetBody();
-    player->revoluteJointDef.bodyB = otherFixture->GetBody();
-    player->revoluteJointDef.collideConnected = false;
-    player->revoluteJointDef.localAnchorA.Set(player->clawLocalAnchorPos.x, player->clawLocalAnchorPos.y);
-    player->revoluteJointDef.localAnchorB.Set(worldPoint.x - otherFixturePos.x, worldPoint.y - otherFixturePos.y);
-    player->revoluteJointDef.referenceAngle = 0.0f;
-    player->revoluteJointDef.lowerAngle = 0.0f;
-    player->revoluteJointDef.upperAngle = 0.0f;
-    player->revoluteJointDef.enableLimit = true;
-    player->revoluteJointDef.enableMotor = false;
-
-    player->queueRevoluteJoint = true;
-}
-
 void MainWindow::setPlayerClawState(MainWindow::Player *player, MainWindow::ClawState state)
 {
     player->clawState = state;
@@ -514,16 +428,14 @@ void MainWindow::setPlayerClawState(MainWindow::Player *player, MainWindow::Claw
 
 }
 
-void MainWindow::addPlatform(b2Vec2 pos, b2Vec2 size, std::string imgName)
+void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName)
 {
     Platform *platform = new Platform();
-    b2BodyDef bodyDef;
-    bodyDef.type = b2_staticBody;
-    bodyDef.position.Set(pos.x, pos.y);
-    platform->body = world->CreateBody(&bodyDef);
-    b2PolygonShape shape;
-    shape.SetAsBox(size.x / 2, size.y / 2);
-    platform->body->CreateFixture(&shape, 0);
+
+    cpVect topLeft = cpvsub(pos, cpvmult(size, 0.5f));
+    platform->shape = cpSegmentShapeNew(space->staticBody, topLeft, cpvadd(topLeft, size), 0.0f);
+    cpShapeSetFriction(platform->shape, 1.0f);
+    cpSpaceAddShape(space, platform->shape);
 
     platform->sprite.setTexture(spritesheet);
 
@@ -536,23 +448,21 @@ void MainWindow::addPlatform(b2Vec2 pos, b2Vec2 size, std::string imgName)
     platform->sprite.setTextureRect(imageInfoToTextureRect(imageInfo));
     platform->sprite.setOrigin(imageInfo->anchor_x, imageInfo->anchor_y);
     platform->sprite.setPosition(pos.x, pos.y);
-    platform->sprite.setScale(fromPixels(size.x / fromPixels(imageInfo->width)), fromPixels(size.y / fromPixels(imageInfo->height)));
+    platform->sprite.setScale(size.x / (float)imageInfo->width, size.y / (float)imageInfo->height);
 
     platforms.push_back(platform);
 }
 
-void MainWindow::initPlayer(int index, b2Vec2 pos)
+void MainWindow::initPlayer(int index, cpVect pos)
 {
     Player *player = players[index];
     RuckSackImage *imageInfo = imageMap.at("img/man.png");
     player->sprite.setOrigin(imageInfo->anchor_x, imageInfo->anchor_y);
-    player->sprite.setScale(fromPixels(1), fromPixels(1));
-    player->localAnchorPos.Set(fromPixels(imageInfo->anchor_x), fromPixels(imageInfo->anchor_y));
+    player->localAnchorPos = cpv(imageInfo->anchor_x, imageInfo->anchor_y);
 
     RuckSackImage *armImageInfo = imageMap.at("img/arm.png");
     player->armSprite.setTexture(spritesheet);
     player->armSprite.setOrigin(armImageInfo->anchor_x, armImageInfo->anchor_y);
-    player->armSprite.setScale(fromPixels(1), fromPixels(1));
     armNormalRect = imageInfoToTextureRect(armImageInfo);
     player->armSprite.setTextureRect(armNormalRect);
     RuckSackImage *armFlungImageInfo = imageMap.at("img/arm-flung.png");
@@ -561,114 +471,17 @@ void MainWindow::initPlayer(int index, b2Vec2 pos)
     RuckSackImage *clawOpenImageInfo = imageMap.at("img/claw.png");
     player->clawSprite.setTexture(spritesheet);
     player->clawSprite.setOrigin(clawOpenImageInfo->anchor_x, clawOpenImageInfo->anchor_y);
-    player->clawSprite.setScale(fromPixels(1), fromPixels(1));
     clawInAirRect = imageInfoToTextureRect(clawOpenImageInfo);
-    clawRadius = fromPixels(clawOpenImageInfo->width) / 2.0f;
+    clawRadius = clawOpenImageInfo->width / 2.0f;
     RuckSackImage *clawClosedImageInfo = imageMap.at("img/claw-retracted.png");
     clawDetachedRect = imageInfoToTextureRect(clawClosedImageInfo);
     RuckSackImage *clawAttachedImageInfo = imageMap.at("img/claw-attached.png");
     clawAttachedRect = imageInfoToTextureRect(clawAttachedImageInfo);
-    player->clawLocalAnchorPos.Set(fromPixels(clawOpenImageInfo->anchor_x), fromPixels(clawOpenImageInfo->anchor_y));
+    player->clawLocalAnchorPos = cpv(clawOpenImageInfo->anchor_x, clawOpenImageInfo->anchor_y);
 
-    b2BodyDef bodyDef;
-    bodyDef.type = b2_dynamicBody;
-    bodyDef.position.Set(pos.x, pos.y);
-    player->body = world->CreateBody(&bodyDef);
-    player->body->SetFixedRotation(true);
-    b2PolygonShape shape;
-    shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f, fromPixels(imageInfo->height) / 2.0f);
-    b2FixtureDef fixtureDef;
-    fixtureDef.shape = &shape;
-    fixtureDef.density = 1.0f;
-    fixtureDef.friction = 0.0f;
-    fixtureDef.userData = &player->playerBodyUserData;
-    player->body->CreateFixture(&fixtureDef);
+    player->body = cpSpaceAddBody(space, cpBodyNew(20.0f, INFINITY));
+    cpBodySetPos(player->body, cpv(pos.x, pos.y));
 
-    shape.SetAsBox(fromPixels(imageInfo->width) / 2.0f - 0.001f, 0.3f, b2Vec2(0, fromPixels(imageInfo->height) / 2.0f), 0.0f);
-    fixtureDef.isSensor = true;
-    fixtureDef.userData = &player->footSensorUserData;
-    player->body->CreateFixture(&fixtureDef);
-}
-
-
-void MainWindow::GlobalContactListener::BeginContact(b2Contact *contact)
-{
-    FixtureIdent *fixtureIdent;
-
-    b2Fixture *fixtureA = contact->GetFixtureA();
-    b2Fixture *fixtureB = contact->GetFixtureB();
-
-    fixtureIdent = (FixtureIdent*) fixtureA->GetUserData();
-    if (fixtureIdent) {
-        switch (fixtureIdent->type) {
-        case FootSensorFixture:
-            fixtureIdent->player->footContacts += 1;
-            break;
-        case ClawFixture:
-            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureA, fixtureB);
-            break;
-        case PlayerFixture:
-            break;
-        }
-    }
-
-    fixtureIdent = (FixtureIdent*) fixtureB->GetUserData();
-    if (fixtureIdent) {
-        switch (fixtureIdent->type) {
-        case FootSensorFixture:
-            fixtureIdent->player->footContacts += 1;
-            break;
-        case ClawFixture:
-            fixtureIdent->window->handleClawHit(fixtureIdent->player, contact, fixtureB, fixtureA);
-            break;
-        case PlayerFixture:
-            break;
-        }
-    }
-}
-
-void MainWindow::GlobalContactListener::EndContact(b2Contact *contact)
-{
-    FixtureIdent *fixtureIdent;
-
-    b2Fixture *fixtureA = contact->GetFixtureA();
-    fixtureIdent = (FixtureIdent*) fixtureA->GetUserData();
-    if (fixtureIdent) {
-        switch (fixtureIdent->type) {
-        case FootSensorFixture:
-            fixtureIdent->player->footContacts -= 1;
-            break;
-        case ClawFixture:
-            // nothing to do here
-            break;
-        case PlayerFixture:
-            break;
-        }
-    }
-
-    b2Fixture *fixtureB = contact->GetFixtureB();
-    fixtureIdent = (FixtureIdent*) fixtureB->GetUserData();
-    if (fixtureIdent) {
-        switch (fixtureIdent->type) {
-        case FootSensorFixture:
-            fixtureIdent->player->footContacts -= 1;
-            break;
-        case ClawFixture:
-            // nothing to do here
-            break;
-        case PlayerFixture:
-            break;
-        }
-    }
-}
-
-bool MainWindow::GlobalContactListener::ShouldCollide(b2Fixture *fixtureA, b2Fixture *fixtureB)
-{
-    FixtureIdent *fixtureIdentA = (FixtureIdent*) fixtureA->GetUserData();
-    FixtureIdent *fixtureIdentB = (FixtureIdent*) fixtureB->GetUserData();
-
-    if (!fixtureIdentA || !fixtureIdentB)
-        return true;
-
-    return fixtureIdentA->player != fixtureIdentB->player;
+    player->shape = cpSpaceAddShape(space, cpBoxShapeNew(player->body, imageInfo->width, imageInfo->height));
+    cpShapeSetFriction(player->shape, 0.0f);
 }

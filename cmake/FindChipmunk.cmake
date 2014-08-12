@@ -7,7 +7,7 @@
 # CHIPMUNK_FOUND
 
 find_path(CHIPMUNK_INCLUDE_DIR NAMES chipmunk/chipmunk.h)
-find_library(CHIPMUNK_LIBRARY NAMES rucksack)
+find_library(CHIPMUNK_LIBRARY NAMES chipmunk)
 
 if(CHIPMUNK_LIBRARY AND CHIPMUNK_INCLUDE_DIR)
   set(CHIPMUNK_FOUND TRUE)

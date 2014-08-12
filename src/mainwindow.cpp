@@ -8,7 +8,7 @@
 static int windowWidth = 1920;
 static int windowHeight = 1080;
 
-static float deadZoneThreshold = 0.20f;
+static float deadZoneThreshold = 0.15f;
 static float maxPlayerSpeed = 200.0f;
 static float playerMoveForceAir = 300.0f;
 static float playerMoveForceGround = 600.0f;
@@ -164,6 +164,7 @@ int MainWindow::start()
 
     space = cpSpaceNew();
     cpSpaceSetGravity(space, cpv(0, 1000));
+    cpSpaceSetDamping(space, 0.95f);
     cpSpaceAddCollisionHandler(space, 0, 0, NULL, NULL, postSolveCollisionCallback, NULL, this);
 
     players.push_back(new Player(0, this));

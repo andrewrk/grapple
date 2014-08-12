@@ -23,9 +23,7 @@ private:
 
 
     enum FixtureIdentType {
-        FootSensorFixture,
         ClawFixture,
-        PlayerFixture,
     };
 
     class Player;
@@ -56,15 +54,13 @@ private:
         cpBody *clawBody = NULL;
         cpShape *clawShape = NULL;
         FixtureIdent clawFixtureUserData;
-        FixtureIdent footSensorUserData;
-        FixtureIdent playerBodyUserData;
         cpVect aimStartPos; // where the claw will be created
         cpVect aimUnit; // unit vector pointing where aiming
         cpVect localAnchorPos;
         cpVect clawLocalAnchorPos;
         cpSlideJoint *slideJoint = NULL;
         cpPivotJoint *pivotJoint = NULL;
-        bool queuePivoteJoint = false;
+        bool queuePivotJoint = false;
 
         cpBody *body = NULL;
         cpShape *shape = NULL;
@@ -130,7 +126,11 @@ private:
 
     void setPlayerClawState(Player *player, ClawState state);
 
+    void onPostSolveCollision(cpArbiter *arb);
+    void handleClawHit(Player *player, cpArbiter *arb, cpShape *otherShape);
+
     static void groundQueryCallback(cpShape *shape, void *data);
+    static void postSolveCollisionCallback(cpArbiter *arb, cpSpace *space, void *data);
 };
 
 #endif // MAINWINDOW_H

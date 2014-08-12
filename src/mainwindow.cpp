@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cmath>
 #include <algorithm>
+#include <cassert>
 
 static int windowWidth = 1920;
 static int windowHeight = 1080;
@@ -48,14 +49,6 @@ MainWindow::Player::Player(int i, MainWindow *window)
     clawFixtureUserData.type = ClawFixture;
     clawFixtureUserData.player = this;
 
-    footSensorUserData.window = window;
-    footSensorUserData.type = FootSensorFixture;
-    footSensorUserData.player = this;
-
-    playerBodyUserData.window = window;
-    playerBodyUserData.type = PlayerFixture;
-    playerBodyUserData.player = this;
-
     aimUnit = {1, 0};
 
     resetButtons();
@@ -72,6 +65,12 @@ void MainWindow::Player::resetButtons()
 void MainWindow::groundQueryCallback(cpShape *shape, void *data) {
     Player *player = reinterpret_cast<Player *>(data);
     player->footContacts += 1;
+}
+
+void MainWindow::postSolveCollisionCallback(cpArbiter *arb, cpSpace *space, void *data)
+{
+    MainWindow *window = reinterpret_cast<MainWindow *>(data);
+    window->onPostSolveCollision(arb);
 }
 
 int MainWindow::start()
@@ -156,6 +155,8 @@ int MainWindow::start()
 
     space = cpSpaceNew();
     cpSpaceSetGravity(space, cpv(0, 1000));
+    cpSpaceAddCollisionHandler(space, 0, 0, NULL, NULL, postSolveCollisionCallback, NULL, this);
+
     players.push_back(new Player(0, this));
     players.push_back(new Player(1, this));
     players.push_back(new Player(2, this));
@@ -192,11 +193,13 @@ int MainWindow::start()
 
         for (int i = 0; i < (int)players.size(); i += 1) {
             Player *player = players[i];
-            if (player->queuePivoteJoint) {
-                player->queuePivoteJoint = false;
-                // TODO player->pivotJoint = (b2RevoluteJoint *) space->CreateJoint(&player->revoluteJointDef);
+            if (player->queuePivotJoint) {
+                player->queuePivotJoint = false;
+                cpSpaceAddConstraint(space, &player->pivotJoint->constraint);
             }
         }
+
+
 
         cpSpaceStep(space, timeStep);
 
@@ -265,6 +268,7 @@ int MainWindow::start()
                 player->clawShape = cpSpaceAddShape(space, cpCircleShapeNew(player->clawBody, clawRadius, cpvzero));
                 cpShapeSetFriction(player->clawShape, 0.0f);
                 cpShapeSetElasticity(player->clawShape, 0.0f);
+                cpShapeSetUserData(player->clawShape, &player->clawFixtureUserData);
 
                 player->slideJoint = cpSlideJointAlloc();
                 cpSlideJointInit(player->slideJoint, player->body, player->clawBody,
@@ -443,6 +447,59 @@ void MainWindow::setPlayerClawState(MainWindow::Player *player, MainWindow::Claw
         break;
     }
 
+}
+
+void MainWindow::onPostSolveCollision(cpArbiter *arb)
+{
+    cpShape *a;
+    cpShape *b;
+    cpArbiterGetShapes(arb, &a, &b);
+
+    FixtureIdent *identA = reinterpret_cast<FixtureIdent*>(cpShapeGetUserData(a));
+    FixtureIdent *identB = reinterpret_cast<FixtureIdent*>(cpShapeGetUserData(b));
+
+    if (identA) {
+        switch (identA->type) {
+        case ClawFixture:
+            handleClawHit(identA->player, arb, b);
+            return;
+        }
+        std::cerr << "Unrecognized fixture identification type: " << identA->type << "\n";
+        assert(0);
+    }
+    if (identB) {
+        switch (identB->type) {
+        case ClawFixture:
+            handleClawHit(identA->player, arb, a);
+            return;
+        }
+        std::cerr << "Unrecognized fixture identification type: " << identB->type << "\n";
+        assert(0);
+    }
+}
+
+void MainWindow::handleClawHit(MainWindow::Player *player, cpArbiter *arb, cpShape *otherShape)
+{
+    if (player->clawState != ClawStateAir)
+        return;
+
+    setPlayerClawState(player, ClawStateAttached);
+
+    cpContactPointSet pointSet = cpArbiterGetContactPointSet(arb);
+
+    // average the contact points to get a single value
+    float scaleVal = 1 / (float) pointSet.count;
+    cpVect pt = cpvzero;
+    for (int i = 0; i < pointSet.count; i += 1) {
+        pt = cpvadd(pt, cpvmult(pointSet.points[i].point, scaleVal));
+    }
+
+    cpVect shapeAnchor = cpvsub(pt, otherShape->body->p);
+    cpVect clawAnchor = cpvsub(pt, player->clawBody->p);
+
+    player->pivotJoint = cpPivotJointAlloc();
+    cpPivotJointInit(player->pivotJoint, player->clawBody, otherShape->body, clawAnchor, shapeAnchor);
+    player->queuePivotJoint = true;
 }
 
 void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName)

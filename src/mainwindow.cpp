@@ -8,8 +8,8 @@ static int windowWidth = 1920;
 static int windowHeight = 1080;
 
 static float deadZoneThreshold = 0.20f;
-static float maxPlayerSpeed = 20.0;
-static float maxJumpSpeed = 40.0f;
+static float maxPlayerSpeed = 200.0;
+static float maxJumpSpeed = 400.0f;
 static int maxJumpFrames = 14;
 static float clawShootSpeed = 2000.0f;
 static float minClawDist = 50.0f;
@@ -67,6 +67,11 @@ void MainWindow::Player::resetButtons()
     yAxis = 0.0f;
     btnJump = false;
     btnFireGrapple = false;
+}
+
+void MainWindow::groundQueryCallback(cpShape *shape, void *data) {
+    Player *player = reinterpret_cast<Player *>(data);
+    player->footContacts += 1;
 }
 
 int MainWindow::start()
@@ -143,12 +148,11 @@ int MainWindow::start()
     armLength = 50.0f;
     ropeColor = sf::Color(255, 255, 0);
 
-    int textHeight = 20;
     physDebugText.setFont(font);
     physDebugText.setString("physics debug");
-    physDebugText.setCharacterSize(textHeight);
+    physDebugText.setCharacterSize(20);
     physDebugText.setColor(sf::Color(0, 0, 0, 255));
-    physDebugText.setPosition(0, arenaHeight - textHeight);
+    physDebugText.setPosition(0, 0);
 
     space = cpSpaceNew();
     cpSpaceSetGravity(space, cpv(0, 1000));
@@ -210,6 +214,17 @@ int MainWindow::start()
                 player->btnJump = sf::Joystick::isButtonPressed(i, 0);
                 player->btnFireGrapple = sf::Joystick::isButtonPressed(i, 2);
             }
+
+            // find out if grounded
+            player->footContacts = 0;
+            cpBB footBB = cpBBNew(
+                        pos.x - player->size.x / 2.0f + 1.0f,
+                        pos.y + player->size.y / 2.0f + 1.0f,
+                        pos.x + player->size.x / 2.0f - 1.0f,
+                        pos.y + player->size.y / 2.0f + 3.0f);
+            cpSpaceBBQuery(space, footBB, -1, 0, groundQueryCallback, player);
+
+
             cpVect curVel = player->body->v;
 
             curVel.x = player->xAxis * maxPlayerSpeed;
@@ -269,12 +284,14 @@ int MainWindow::start()
                     float newMax = std::max(currentLength - delta, minClawDist);
                     cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
 
-                    if (i == 0) {
-                        std::stringstream ss;
-                        ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts << " newMax: " << newMax;
-                        physDebugText.setString(ss.str());
-                    }
                 }
+            }
+
+
+            if (i == 0) {
+                std::stringstream ss;
+                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts;
+                physDebugText.setString(ss.str());
             }
 
             Animation *currentAnim = NULL;
@@ -432,8 +449,9 @@ void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName)
 {
     Platform *platform = new Platform();
 
-    cpVect topLeft = cpvsub(pos, cpvmult(size, 0.5f));
-    platform->shape = cpSegmentShapeNew(space->staticBody, topLeft, cpvadd(topLeft, size), 0.0f);
+    platform->body = cpBodyNewStatic();
+    cpBodySetPos(platform->body, pos);
+    platform->shape = cpBoxShapeNew(platform->body, size.x, size.y);
     cpShapeSetFriction(platform->shape, 1.0f);
     cpSpaceAddShape(space, platform->shape);
 
@@ -459,6 +477,7 @@ void MainWindow::initPlayer(int index, cpVect pos)
     RuckSackImage *imageInfo = imageMap.at("img/man.png");
     player->sprite.setOrigin(imageInfo->anchor_x, imageInfo->anchor_y);
     player->localAnchorPos = cpv(imageInfo->anchor_x, imageInfo->anchor_y);
+    player->size = cpv(imageInfo->width, imageInfo->height);
 
     RuckSackImage *armImageInfo = imageMap.at("img/arm.png");
     player->armSprite.setTexture(spritesheet);
@@ -482,6 +501,6 @@ void MainWindow::initPlayer(int index, cpVect pos)
     player->body = cpSpaceAddBody(space, cpBodyNew(20.0f, INFINITY));
     cpBodySetPos(player->body, cpv(pos.x, pos.y));
 
-    player->shape = cpSpaceAddShape(space, cpBoxShapeNew(player->body, imageInfo->width, imageInfo->height));
+    player->shape = cpSpaceAddShape(space, cpBoxShapeNew(player->body, player->size.x, player->size.y));
     cpShapeSetFriction(player->shape, 0.0f);
 }

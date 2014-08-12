@@ -68,6 +68,7 @@ private:
 
         cpBody *body = NULL;
         cpShape *shape = NULL;
+        cpVect size;
         int footContacts = 0;
         int jumpFrameCount = 0;
         float armRotateOffset = 0;
@@ -80,6 +81,7 @@ private:
     public:
         sf::Sprite sprite;
         cpShape *shape;
+        cpBody *body;
     };
 
 
@@ -127,6 +129,8 @@ private:
     void loadAnimation(Animation &animation, const std::vector<std::string> &list);
 
     void setPlayerClawState(Player *player, ClawState state);
+
+    static void groundQueryCallback(cpShape *shape, void *data);
 };
 
 #endif // MAINWINDOW_H

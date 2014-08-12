@@ -1,10 +1,16 @@
 # Grapple
 
+## Demo
+
+![Screenshot](http://i.imgur.com/WmXMtAv.png)
+
+[YouTube Video](https://www.youtube.com/watch?v=LdumpgdooMc)
+
 ## Dependencies
 
  * cmake
  * SFML
- * Box2D
+ * chipmunk
  * [tmxparser](https://github.com/andrewrk/tmxparser)
  * [rucksack](https://github.com/andrewrk/rucksack)
 

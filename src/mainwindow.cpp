@@ -9,12 +9,17 @@ static int windowWidth = 1920;
 static int windowHeight = 1080;
 
 static float deadZoneThreshold = 0.20f;
-static float maxPlayerSpeed = 200.0;
-static float maxJumpSpeed = 400.0f;
+static float maxPlayerSpeed = 200.0f;
+static float playerMoveForceAir = 300.0f;
+static float playerMoveForceGround = 600.0f;
+static float jumpForce = 800.0f;
 static int maxJumpFrames = 14;
 static float clawShootSpeed = 2000.0f;
 static float minClawDist = 50.0f;
+static float retractClawDist = 100.0f;
 static float clawReelInSpeed = 5.0f;
+//static float easeTensionSlack = 5.0f;
+//static float jnAccMin = -1200.0f;
 
 
 static float toDegrees(float radians) {
@@ -60,6 +65,7 @@ void MainWindow::Player::resetButtons()
     yAxis = 0.0f;
     btnJump = false;
     btnFireGrapple = false;
+    btnUnhookGrapple = false;
 }
 
 void MainWindow::groundQueryCallback(cpShape *shape, void *data) {
@@ -145,7 +151,9 @@ int MainWindow::start()
     arenaWidth = windowWidth;
     arenaHeight = windowHeight;
     armLength = 50.0f;
-    ropeColor = sf::Color(255, 255, 0);
+    normalRopeColor = sf::Color(255, 255, 0);
+    retractClawColor = sf::Color(0, 0, 255);
+
 
     physDebugText.setFont(font);
     physDebugText.setString("physics debug");
@@ -209,28 +217,41 @@ int MainWindow::start()
             Player *player = players[i];
             cpVect pos = player->body->p;
             player->sprite.setPosition(pos.x, pos.y);
-            player->sprite.setRotation(toDegrees(player->body->a));
+            player->sprite.setRotation(toDegrees(cpBodyGetAngle(player->body)));
             player->resetButtons();
             if (sf::Joystick::isConnected(i)) {
                 player->xAxis = joyAxis(i, sf::Joystick::X);
                 player->yAxis = joyAxis(i, sf::Joystick::Y);
                 player->btnJump = sf::Joystick::isButtonPressed(i, 0);
                 player->btnFireGrapple = sf::Joystick::isButtonPressed(i, 2);
+                player->btnUnhookGrapple = sf::Joystick::isButtonPressed(i, 1);
             }
 
             // find out if grounded
             player->footContacts = 0;
+            float distFromEdge = 4.0f;
             cpBB footBB = cpBBNew(
-                        pos.x - player->size.x / 2.0f + 1.0f,
+                        pos.x - player->size.x / 2.0f + distFromEdge,
                         pos.y + player->size.y / 2.0f + 1.0f,
-                        pos.x + player->size.x / 2.0f - 1.0f,
+                        pos.x + player->size.x / 2.0f - distFromEdge,
                         pos.y + player->size.y / 2.0f + 3.0f);
             cpSpaceBBQuery(space, footBB, -1, 0, groundQueryCallback, player);
 
 
-            cpVect curVel = player->body->v;
+            cpVect curVel = cpBodyGetVel(player->body);
 
-            curVel.x = player->xAxis * maxPlayerSpeed;
+            float moveForce = (player->footContacts > 0) ? playerMoveForceGround : playerMoveForceAir;
+            if (player->xAxis < 0) {
+                if (curVel.x >= -maxPlayerSpeed) {
+                    cpBodyApplyImpulse(player->body, cpv(-moveForce, 0), cpvzero);
+                }
+            } else if (player->xAxis > 0) {
+                if (curVel.x <= maxPlayerSpeed) {
+                    cpBodyApplyImpulse(player->body, cpv(moveForce, 0), cpvzero);
+                }
+            }
+
+
             if (player->btnJump && player->footContacts > 0) {
                 player->jumpFrameCount = 1;
             } else if (!player->btnJump && player->jumpFrameCount > 0) {
@@ -240,9 +261,8 @@ int MainWindow::start()
                 player->jumpFrameCount = 0;
             } else if (player->jumpFrameCount > 0) {
                 player->jumpFrameCount += 1;
-                curVel.y = -maxJumpSpeed;
+                cpBodyApplyImpulse(player->body, cpv(0, -jumpForce), cpvzero);
             }
-            cpBodySetVel(player->body, curVel);
 
             float scaleSign = sign(player->xAxis);
             if (scaleSign != 0) {
@@ -254,15 +274,17 @@ int MainWindow::start()
                 armScale.x = fabsf(armScale.x) * scaleSign;
                 player->armRotateOffset = (scaleSign == -1.0f) ? M_PI : 0;
                 player->armSprite.setScale(armScale);
-
-                player->aimUnit = cpvnormalize(cpv(player->xAxis, player->yAxis));
             }
+            if (player->xAxis != 0 || player->yAxis != 0) {
+                player->pointAngle = atan2(player->yAxis, player->xAxis);
+            }
+            player->aimUnit = cpv(cos(player->pointAngle), sin(player->pointAngle));
             player->aimStartPos = cpvadd(pos, cpvmult(player->aimUnit, armLength));
 
             if (player->btnFireGrapple && player->clawState == ClawStateRetracted) {
                 player->clawBody = cpSpaceAddBody(space, cpBodyNew(5.0f, INFINITY));
                 cpBodySetPos(player->clawBody, player->aimStartPos);
-                cpBodySetAngle(player->clawBody, atan2(player->yAxis, player->xAxis));
+                cpBodySetAngle(player->clawBody, player->pointAngle);
                 cpBodySetVel(player->clawBody, cpvadd(curVel, cpvmult(player->aimUnit, clawShootSpeed)));
 
                 player->clawShape = cpSpaceAddShape(space, cpCircleShapeNew(player->clawBody, clawRadius, cpvzero));
@@ -272,31 +294,47 @@ int MainWindow::start()
 
                 player->slideJoint = cpSlideJointAlloc();
                 cpSlideJointInit(player->slideJoint, player->body, player->clawBody,
-                                 player->localAnchorPos, player->clawLocalAnchorPos, minClawDist, INFINITY);
+                                 player->localAnchorPos, player->clawLocalAnchorPos, minClawDist, 99999999.0f);
                 cpSpaceAddConstraint(space, &player->slideJoint->constraint);
                 setPlayerClawState(player, ClawStateAir);
-            } else if (player->btnFireGrapple && player->clawState == ClawStateAttached) {
+            } else if (player->btnFireGrapple && (player->clawState == ClawStateDetached || player->clawState == ClawStateAttached)) {
                 cpVect clawPos = player->clawBody->p;
                 float clawDist = cpvlength(cpvsub(clawPos, pos));
-                if (clawDist <= minClawDist) {
-                    // TODO retract claw
+                if (clawDist <= retractClawDist) {
+                    player->wantToRetractClaw = true;
                 } else {
                     // prevent the claw from going back out once it goes in
-                    float currentLength = player->slideJoint->max;
+                    float currentLength = cpSlideJointGetMax(&player->slideJoint->constraint);
                     float autoDelta = currentLength - clawDist;
                     float delta = std::max(autoDelta, clawReelInSpeed);
                     float newMax = std::max(currentLength - delta, minClawDist);
                     cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
 
                 }
+            } else if (!player->btnFireGrapple && player->wantToRetractClaw) {
+                playerRetractClaw(player);
+            } else if (player->btnUnhookGrapple && player->clawState == ClawStateAttached) {
+                playerUnhookClaw(player);
             }
+/*
+            if (player->clawState != ClawStateRetracted) {
+                if (player->slideJoint->jnAcc < jnAccMin) {
+                    // too tense. give it some slack.
+                    float currentLength = cpSlideJointGetMax(&player->slideJoint->constraint);
+                    float newMax = currentLength + easeTensionSlack;
+                    cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
+                    player->slideJoint->jnAcc = jnAccMin;
+                }
+            }
+            */
 
-
-            if (i == 0) {
+            if (i == 0 && player->slideJoint) {
                 std::stringstream ss;
-                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts;
+                ss << "xAxis: " << player->xAxis << " footContacts: " << player->footContacts <<
+                      " jnAcc: " << player->slideJoint->jnAcc;
                 physDebugText.setString(ss.str());
             }
+
 
             Animation *currentAnim = NULL;
             bool loop = true;
@@ -317,7 +355,7 @@ int MainWindow::start()
             }
             player->armSprite.setPosition(pos.x, pos.y);
             if (player->xAxis != 0 || player->yAxis != 0)
-                player->armSprite.setRotation(toDegrees(player->armRotateOffset + atan2(player->yAxis, player->xAxis)));
+                player->armSprite.setRotation(toDegrees(player->armRotateOffset + player->pointAngle));
 
         }
 
@@ -336,6 +374,7 @@ int MainWindow::start()
                 player->clawSprite.setRotation(toDegrees(player->clawBody->a));
                 window.draw(player->clawSprite);
 
+                sf::Color ropeColor = player->wantToRetractClaw ? retractClawColor : normalRopeColor;
                 sf::Vertex line[] =
                 {
                     sf::Vertex(sf::Vector2f(player->aimStartPos.x, player->aimStartPos.y), ropeColor),
@@ -502,6 +541,40 @@ void MainWindow::handleClawHit(MainWindow::Player *player, cpArbiter *arb, cpSha
     player->queuePivotJoint = true;
 }
 
+void MainWindow::playerRetractClaw(MainWindow::Player *player)
+{
+    assert(player->clawState != ClawStateRetracted);
+
+    if (player->clawState == ClawStateAttached)
+        playerUnhookClaw(player);
+
+    setPlayerClawState(player, ClawStateRetracted);
+    player->wantToRetractClaw = false;
+
+    cpSpaceRemoveConstraint(space, &player->slideJoint->constraint);
+    cpConstraintDestroy(&player->slideJoint->constraint);
+    player->slideJoint = NULL;
+
+    cpSpaceRemoveShape(space, player->clawShape);
+    cpShapeDestroy(player->clawShape);
+    player->clawShape = NULL;
+
+    cpSpaceRemoveBody(space, player->clawBody);
+    cpBodyDestroy(player->clawBody);
+    player->clawBody = NULL;
+}
+
+void MainWindow::playerUnhookClaw(MainWindow::Player *player)
+{
+    assert(player->clawState == ClawStateAttached);
+
+    setPlayerClawState(player, ClawStateDetached);
+
+    cpSpaceRemoveConstraint(space, &player->pivotJoint->constraint);
+    cpConstraintDestroy(&player->pivotJoint->constraint);
+    player->pivotJoint = NULL;
+}
+
 void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName)
 {
     Platform *platform = new Platform();
@@ -509,7 +582,7 @@ void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName)
     platform->body = cpBodyNewStatic();
     cpBodySetPos(platform->body, pos);
     platform->shape = cpBoxShapeNew(platform->body, size.x, size.y);
-    cpShapeSetFriction(platform->shape, 1.0f);
+    cpShapeSetFriction(platform->shape, 0.8f);
     cpSpaceAddShape(space, platform->shape);
 
     platform->sprite.setTexture(spritesheet);
@@ -559,5 +632,5 @@ void MainWindow::initPlayer(int index, cpVect pos)
     cpBodySetPos(player->body, cpv(pos.x, pos.y));
 
     player->shape = cpSpaceAddShape(space, cpBoxShapeNew(player->body, player->size.x, player->size.y));
-    cpShapeSetFriction(player->shape, 0.0f);
+    cpShapeSetFriction(player->shape, 0.8f);
 }

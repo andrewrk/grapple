@@ -43,10 +43,13 @@ private:
     class Player {
     public:
         int index;
+
         float xAxis;
         float yAxis;
         bool btnJump;
         bool btnFireGrapple;
+        bool btnUnhookGrapple;
+
         AnimatedSprite sprite;
         sf::Sprite armSprite;
         sf::Sprite clawSprite;
@@ -56,11 +59,13 @@ private:
         FixtureIdent clawFixtureUserData;
         cpVect aimStartPos; // where the claw will be created
         cpVect aimUnit; // unit vector pointing where aiming
+        float pointAngle = 0.0f;
         cpVect localAnchorPos;
         cpVect clawLocalAnchorPos;
         cpSlideJoint *slideJoint = NULL;
         cpPivotJoint *pivotJoint = NULL;
         bool queuePivotJoint = false;
+        bool wantToRetractClaw = false;
 
         cpBody *body = NULL;
         cpShape *shape = NULL;
@@ -111,7 +116,8 @@ private:
 
 
 
-    sf::Color ropeColor;
+    sf::Color normalRopeColor;
+    sf::Color retractClawColor;
 
     void loadMap();
 
@@ -128,6 +134,8 @@ private:
 
     void onPostSolveCollision(cpArbiter *arb);
     void handleClawHit(Player *player, cpArbiter *arb, cpShape *otherShape);
+    void playerRetractClaw(Player *player);
+    void playerUnhookClaw(Player *player);
 
     static void groundQueryCallback(cpShape *shape, void *data);
     static void postSolveCollisionCallback(cpArbiter *arb, cpSpace *space, void *data);

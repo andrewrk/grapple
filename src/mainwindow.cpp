@@ -207,6 +207,9 @@ int MainWindow::start()
                 player->queuePivotJoint = false;
                 cpSpaceAddConstraint(space, &player->pivotJoint->constraint);
                 setPlayerClawState(player, ClawStateAttached);
+                float clawDist = cpvlength(cpvsub(cpBodyGetPos(player->clawBody), cpBodyGetPos(player->body)));
+                float newMax = std::max(clawDist, minClawDist);
+                cpSlideJointSetMax(&player->slideJoint->constraint, newMax);
             }
         }
 
@@ -402,10 +405,9 @@ void MainWindow::loadMap()
             cpVect size = cpv(object->GetWidth(), object->GetHeight());
             cpVect pos = cpv(object->GetX() + size.x / 2, object->GetY() + size.y / 2);
             const Tmx::PropertySet &properties = object->GetProperties();
-            std::string img = properties.GetLiteralProperty("img");
 
             if (object->GetName().compare("Platform") == 0) {
-                addPlatform(pos, size, img);
+                addPlatform(pos, size, properties.GetLiteralProperty("img"));
             } else if (object->GetName().compare("Start") == 0) {
                 int index = properties.GetNumericProperty("player");
                 initPlayer(index, pos);

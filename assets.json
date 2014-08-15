@@ -37,6 +37,9 @@
         "img/graybox.png": {
           path: "assets/img/graybox.png",
         },
+        "img/brownbox.png": {
+          path: "assets/img/brownbox.png",
+        },
         "img/man.png": {
           path: "assets/img/man.png",
         },

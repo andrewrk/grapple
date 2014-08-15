@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.0" orientation="orthogonal" width="240" height="135" tilewidth="8" tileheight="8">
  <objectgroup name="Object Layer 1" width="240" height="135">
-  <object name="Platform" x="0" y="0" width="32" height="1040">
+  <object name="Platform" x="0" y="0" width="40" height="1032">
    <properties>
-    <property name="img" value="img/graybox.png"/>
+    <property name="canGrapple" value="0"/>
+    <property name="img" value="img/brownbox.png"/>
    </properties>
   </object>
   <object name="Platform" x="264" y="424" width="208" height="32">
@@ -21,7 +22,7 @@
     <property name="img" value="img/graybox.png"/>
    </properties>
   </object>
-  <object name="Start" x="304" y="992" width="32" height="32">
+  <object name="Start" x="304" y="976" width="32" height="32">
    <properties>
     <property name="player" value="0"/>
    </properties>
@@ -36,22 +37,23 @@
     <property name="player" value="3"/>
    </properties>
   </object>
-  <object name="Start" x="1680" y="1000" width="32" height="32">
+  <object name="Start" x="1680" y="984" width="32" height="32">
    <properties>
     <property name="player" value="1"/>
    </properties>
   </object>
-  <object name="Platform" x="0" y="1040" width="1912" height="32">
+  <object name="Platform" x="0" y="1032" width="1912" height="48">
    <properties>
     <property name="img" value="img/graybox.png"/>
    </properties>
   </object>
-  <object name="Platform" x="1880" y="0" width="32" height="1040">
+  <object name="Platform" x="1864" y="0" width="48" height="1032">
    <properties>
-    <property name="img" value="img/graybox.png"/>
+    <property name="canGrapple" value="0"/>
+    <property name="img" value="img/brownbox.png"/>
    </properties>
   </object>
-  <object name="Platform" x="32" y="0" width="1848" height="32">
+  <object name="Platform" x="40" y="0" width="1824" height="40">
    <properties>
     <property name="img" value="img/graybox.png"/>
    </properties>

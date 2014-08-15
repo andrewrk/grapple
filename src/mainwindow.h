@@ -24,6 +24,7 @@ private:
 
     enum FixtureIdentType {
         ClawFixture,
+        PlatformFixture,
     };
 
     class Player;
@@ -31,6 +32,7 @@ private:
         FixtureIdentType type;
         MainWindow *window;
         Player *player;
+        bool canGrapple;
     };
 
     enum ClawState {
@@ -83,6 +85,8 @@ private:
         sf::Sprite sprite;
         cpShape *shape;
         cpBody *body;
+        FixtureIdent ident;
+        Platform(MainWindow *window);
     };
 
 
@@ -122,7 +126,7 @@ private:
 
     std::string getResourceString(const std::string &key);
 
-    void addPlatform(cpVect pos, cpVect size, std::string img);
+    void addPlatform(cpVect pos, cpVect size, std::string img, bool canGrapple);
     void initPlayer(int index, cpVect pos);
 
     sf::IntRect imageInfoToTextureRect(RuckSackImage *imageInfo);

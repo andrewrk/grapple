@@ -11,7 +11,7 @@
  * cmake
  * SFML
  * chipmunk
- * [tmxparser](https://github.com/andrewrk/tmxparser)
+ * [tmxparser](https://github.com/andrewrk/tmxparser) - master branch
  * [rucksack](https://github.com/andrewrk/rucksack)
 
 Maps are edited with [tiled](http://www.mapeditor.org/)

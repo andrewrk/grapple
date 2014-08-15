@@ -54,6 +54,7 @@ MainWindow::Player::Player(int i, MainWindow *window)
     clawFixtureUserData.window = window;
     clawFixtureUserData.type = ClawFixture;
     clawFixtureUserData.player = this;
+    clawFixtureUserData.canGrapple = true;
 
     aimUnit = {1, 0};
 
@@ -310,7 +311,7 @@ int MainWindow::start()
                 playerReelClawOneFrame(player, true);
             } else if (player->btnUnhookGrapple && player->clawState == ClawStateDetached) {
                 playerReelClawOneFrame(player, true);
-            } else if (player->btnUnhookGrapple && player->clawState == ClawStateAttached) {
+            } else if (player->btnUnhookGrapple && (player->clawState == ClawStateAttached || player->clawState == ClawStateAir)) {
                 playerUnhookClaw(player);
             } else if (player->btnReelOut && player->clawState == ClawStateAttached) {
                 playerReelOutClawOneFrame(player);
@@ -407,9 +408,11 @@ void MainWindow::loadMap()
             const Tmx::PropertySet &properties = object->GetProperties();
 
             if (object->GetName().compare("Platform") == 0) {
-                addPlatform(pos, size, properties.GetLiteralProperty("img"));
+                std::string img = properties.GetStringProperty("img");
+                bool canGrapple = !!properties.GetIntProperty("canGrapple", 1);
+                addPlatform(pos, size, img, canGrapple);
             } else if (object->GetName().compare("Start") == 0) {
-                int index = properties.GetNumericProperty("player");
+                int index = properties.GetIntProperty("player");
                 initPlayer(index, pos);
             } else {
                 std::cerr << "unrecognized object name: " << object->GetName() << "\n";
@@ -500,6 +503,8 @@ void MainWindow::onPostSolveCollision(cpArbiter *arb)
         case ClawFixture:
             handleClawHit(identA->player, arb, b);
             return;
+        case PlatformFixture:
+            return;
         }
         std::cerr << "Unrecognized fixture identification type: " << identA->type << "\n";
         assert(0);
@@ -508,6 +513,8 @@ void MainWindow::onPostSolveCollision(cpArbiter *arb)
         switch (identB->type) {
         case ClawFixture:
             handleClawHit(identA->player, arb, a);
+            return;
+        case PlatformFixture:
             return;
         }
         std::cerr << "Unrecognized fixture identification type: " << identB->type << "\n";
@@ -520,21 +527,30 @@ void MainWindow::handleClawHit(MainWindow::Player *player, cpArbiter *arb, cpSha
     if (player->clawState != ClawStateAir || player->queuePivotJoint)
         return;
 
-    cpContactPointSet pointSet = cpArbiterGetContactPointSet(arb);
+    FixtureIdent *ident = reinterpret_cast<FixtureIdent*>(cpShapeGetUserData(otherShape));
+    bool canGrapple = !ident || ident->canGrapple;
 
-    // average the contact points to get a single value
-    float scaleVal = 1 / (float) pointSet.count;
-    cpVect pt = cpvzero;
-    for (int i = 0; i < pointSet.count; i += 1) {
-        pt = cpvadd(pt, cpvmult(pointSet.points[i].point, scaleVal));
+    if (canGrapple) {
+        cpContactPointSet pointSet = cpArbiterGetContactPointSet(arb);
+
+        // average the contact points to get a single value
+        float scaleVal = 1 / (float) pointSet.count;
+        cpVect pt = cpvzero;
+        for (int i = 0; i < pointSet.count; i += 1) {
+            pt = cpvadd(pt, cpvmult(pointSet.points[i].point, scaleVal));
+        }
+
+        cpVect shapeAnchor = cpvsub(pt, otherShape->body->p);
+        cpVect clawAnchor = cpvsub(pt, player->clawBody->p);
+
+        player->pivotJoint = cpPivotJointAlloc();
+        cpPivotJointInit(player->pivotJoint, player->clawBody, otherShape->body, clawAnchor, shapeAnchor);
+        player->queuePivotJoint = true;
+    } else {
+        // kill velocity of the grapple body
+        cpBodySetVel(player->clawBody, cpvzero);
+        setPlayerClawState(player, ClawStateDetached);
     }
-
-    cpVect shapeAnchor = cpvsub(pt, otherShape->body->p);
-    cpVect clawAnchor = cpvsub(pt, player->clawBody->p);
-
-    player->pivotJoint = cpPivotJointAlloc();
-    cpPivotJointInit(player->pivotJoint, player->clawBody, otherShape->body, clawAnchor, shapeAnchor);
-    player->queuePivotJoint = true;
 }
 
 void MainWindow::playerRetractClaw(MainWindow::Player *player)
@@ -561,13 +577,13 @@ void MainWindow::playerRetractClaw(MainWindow::Player *player)
 
 void MainWindow::playerUnhookClaw(MainWindow::Player *player)
 {
-    assert(player->clawState == ClawStateAttached);
-
     setPlayerClawState(player, ClawStateDetached);
 
-    cpSpaceRemoveConstraint(space, &player->pivotJoint->constraint);
-    cpConstraintDestroy(&player->pivotJoint->constraint);
-    player->pivotJoint = NULL;
+    if (player->pivotJoint) {
+        cpSpaceRemoveConstraint(space, &player->pivotJoint->constraint);
+        cpConstraintDestroy(&player->pivotJoint->constraint);
+        player->pivotJoint = NULL;
+    }
 }
 
 void MainWindow::playerReelClawOneFrame(MainWindow::Player *player, bool retract)
@@ -600,15 +616,18 @@ float MainWindow::getPlayerReelInSpeed(MainWindow::Player *player)
     return (player->clawState == ClawStateAttached) ? clawReelInSpeedAttached : clawReelInSpeedDetached;
 }
 
-void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName)
+void MainWindow::addPlatform(cpVect pos, cpVect size, std::string imgName, bool canGrapple)
 {
-    Platform *platform = new Platform();
+    Platform *platform = new Platform(this);
 
     platform->body = cpBodyNewStatic();
     cpBodySetPos(platform->body, pos);
     platform->shape = cpBoxShapeNew(platform->body, size.x, size.y);
+    platform->ident.canGrapple = canGrapple;
+    cpShapeSetUserData(platform->shape, &platform->ident);
     cpShapeSetFriction(platform->shape, 0.8f);
     cpSpaceAddShape(space, platform->shape);
+
 
     platform->sprite.setTexture(spritesheet);
 
@@ -658,4 +677,13 @@ void MainWindow::initPlayer(int index, cpVect pos)
 
     player->shape = cpSpaceAddShape(space, cpBoxShapeNew(player->body, player->size.x, player->size.y));
     cpShapeSetFriction(player->shape, 0.8f);
+}
+
+
+MainWindow::Platform::Platform(MainWindow *window)
+{
+    ident.window = window;
+    ident.type = PlatformFixture;
+    ident.player = NULL;
+    ident.canGrapple = true;
 }
